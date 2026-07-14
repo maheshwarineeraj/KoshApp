@@ -2,8 +2,6 @@
 
 Kosh (कोश — "treasury") tracks your income, expenses, savings goals, and net worth **entirely on your device**. No account, no server, no analytics. Bank SMS are parsed on-device and every detected transaction waits for your approval before it is recorded.
 
-> **Naming note:** "Kosh" is fine for personal/sideloaded use, but at least two live fintech products already use the name in India (Kosh group-loan app by Adhikosh Financial Advisory; KOSH Money). Before publishing to any store, run a search on IP India's trademark database (classes 9 & 36) and consider a distinctive variant (e.g. NijKosh, KoshBook, Sanchay).
-
 ## Features
 
 ### Money in / money out
