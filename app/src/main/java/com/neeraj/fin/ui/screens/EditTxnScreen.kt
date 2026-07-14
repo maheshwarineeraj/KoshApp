@@ -1,0 +1,372 @@
+package com.neeraj.fin.ui.screens
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.Button
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.ui.unit.dp
+import androidx.navigation.NavController
+import com.neeraj.fin.data.db.Txn
+import com.neeraj.fin.data.db.TxnType
+import com.neeraj.fin.ui.AppViewModel
+import com.neeraj.fin.ui.components.ConfirmDialog
+import com.neeraj.fin.util.Format
+import java.time.Instant
+import java.time.ZoneId
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+fun EditTxnScreen(vm: AppViewModel, nav: NavController, txnId: Long) {
+    val txns by vm.transactions.collectAsState()
+    val categories by vm.categories.collectAsState()
+    val currency by vm.currencyCode.collectAsState()
+    val eventBudgets by vm.eventBudgets.collectAsState()
+    val goals by vm.goals.collectAsState()
+    val existing = txns.firstOrNull { it.id == txnId }
+
+    var amountText by remember(existing?.id) {
+        mutableStateOf(existing?.let { "%.2f".format(it.amountMinor / 100.0).removeSuffix(".00") } ?: "")
+    }
+    var type by remember(existing?.id) { mutableStateOf(existing?.type ?: TxnType.EXPENSE) }
+    var categoryId by remember(existing?.id) { mutableStateOf(existing?.categoryId) }
+    var merchant by remember(existing?.id) { mutableStateOf(existing?.merchant ?: "") }
+    var note by remember(existing?.id) { mutableStateOf(existing?.note ?: "") }
+    var timestamp by remember(existing?.id) { mutableStateOf(existing?.timestamp ?: System.currentTimeMillis()) }
+    var eventBudgetId by remember(existing?.id) { mutableStateOf(existing?.eventBudgetId) }
+    var goalId by remember(existing?.id) { mutableStateOf(existing?.goalId) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showDelete by remember { mutableStateOf(false) }
+    var showSplit by remember { mutableStateOf(false) }
+
+    val amountMinor = Format.parseAmount(amountText)
+    val matchingCats = categories.filter { it.kind == type }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(if (existing == null) "Add transaction" else "Edit transaction") },
+                navigationIcon = {
+                    IconButton(onClick = { nav.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    if (existing != null && existing.type != TxnType.TRANSFER) {
+                        TextButton(onClick = { showSplit = true }) { Text("Split") }
+                    }
+                    if (existing != null) {
+                        IconButton(onClick = { showDelete = true }) {
+                            Icon(Icons.Filled.Delete, contentDescription = "Delete")
+                        }
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                SegmentedButton(
+                    selected = type == TxnType.EXPENSE,
+                    onClick = { type = TxnType.EXPENSE; if (categoryId != null && categories.firstOrNull { it.id == categoryId }?.kind != TxnType.EXPENSE) categoryId = null },
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3)
+                ) { Text("Expense") }
+                SegmentedButton(
+                    selected = type == TxnType.INCOME,
+                    onClick = { type = TxnType.INCOME; if (categoryId != null && categories.firstOrNull { it.id == categoryId }?.kind != TxnType.INCOME) categoryId = null },
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3)
+                ) { Text("Income") }
+                SegmentedButton(
+                    selected = type == TxnType.TRANSFER,
+                    onClick = { type = TxnType.TRANSFER; categoryId = null },
+                    shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3)
+                ) { Text("Transfer") }
+            }
+
+            if (type == TxnType.TRANSFER) {
+                Text(
+                    "Transfers move money between your own accounts and are excluded from income and expense stats.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            OutlinedTextField(
+                value = amountText,
+                onValueChange = { amountText = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Amount") },
+                prefix = { Text(Format.money(0, currency).first().toString()) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                isError = amountText.isNotBlank() && amountMinor == null,
+                singleLine = true
+            )
+
+            if (type != TxnType.TRANSFER) {
+                Column {
+                    Text("Category", style = MaterialTheme.typography.labelLarge)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        matchingCats.forEach { c ->
+                            FilterChip(
+                                selected = categoryId == c.id,
+                                onClick = { categoryId = if (categoryId == c.id) null else c.id },
+                                label = { Text("${c.emoji} ${c.name}") }
+                            )
+                        }
+                    }
+                    TextButton(onClick = { nav.navigate("categories") }) { Text("Manage categories") }
+                }
+            }
+
+            if (type == TxnType.EXPENSE && eventBudgets.isNotEmpty()) {
+                Column {
+                    Text("Part of a budget? (optional)", style = MaterialTheme.typography.labelLarge)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        eventBudgets.forEach { b ->
+                            FilterChip(
+                                selected = eventBudgetId == b.id,
+                                onClick = { eventBudgetId = if (eventBudgetId == b.id) null else b.id },
+                                label = { Text("${b.emoji} ${b.name}") }
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (type == TxnType.INCOME && goals.isNotEmpty()) {
+                Column {
+                    Text("Put towards a goal? (optional)", style = MaterialTheme.typography.labelLarge)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        goals.forEach { g ->
+                            FilterChip(
+                                selected = goalId == g.id,
+                                onClick = { goalId = if (goalId == g.id) null else g.id },
+                                label = { Text("${g.emoji} ${g.name}") }
+                            )
+                        }
+                    }
+                }
+            }
+
+            OutlinedTextField(
+                value = merchant,
+                onValueChange = { merchant = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = {
+                    Text(
+                        when (type) {
+                            TxnType.EXPENSE -> "Merchant / Payee"
+                            TxnType.INCOME -> "Source"
+                            else -> "Description (e.g. Savings → FD)"
+                        }
+                    )
+                },
+                singleLine = true
+            )
+
+            OutlinedTextField(
+                value = note,
+                onValueChange = { note = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Note (optional)") }
+            )
+
+            OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) {
+                Text(Format.dateTime(timestamp))
+            }
+
+            Button(
+                onClick = {
+                    vm.saveTxn(
+                        (existing ?: Txn(amountMinor = 0, type = type, categoryId = null, merchant = "", timestamp = timestamp)).copy(
+                            amountMinor = amountMinor!!,
+                            type = type,
+                            categoryId = if (type == TxnType.TRANSFER) null else categoryId,
+                            merchant = merchant.trim(),
+                            note = note.trim(),
+                            timestamp = timestamp,
+                            eventBudgetId = if (type == TxnType.EXPENSE) eventBudgetId else null,
+                            goalId = if (type == TxnType.INCOME) goalId else null
+                        )
+                    )
+                    nav.popBackStack()
+                },
+                enabled = amountMinor != null,
+                modifier = Modifier.fillMaxWidth()
+            ) { Text(if (existing == null) "Add" else "Save") }
+        }
+    }
+
+    if (showDatePicker) {
+        val state = rememberDatePickerState(initialSelectedDateMillis = timestamp)
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    state.selectedDateMillis?.let { selected ->
+                        // Keep the original time of day, change the date
+                        val date = Instant.ofEpochMilli(selected).atZone(ZoneId.of("UTC")).toLocalDate()
+                        val time = Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault()).toLocalTime()
+                        timestamp = date.atTime(time).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                    }
+                    showDatePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancel") } }
+        ) { DatePicker(state = state) }
+    }
+
+    if (showSplit && existing != null) {
+        SplitDialog(
+            original = existing,
+            categories = categories.filter { it.kind == existing.type },
+            currency = currency,
+            onSplit = { parts ->
+                vm.splitTxn(existing, parts)
+                showSplit = false
+                nav.popBackStack()
+            },
+            onDismiss = { showSplit = false }
+        )
+    }
+
+    if (showDelete && existing != null) {
+        ConfirmDialog(
+            title = "Delete transaction?",
+            text = "This cannot be undone.",
+            confirmLabel = "Delete",
+            onConfirm = {
+                vm.deleteTxn(existing)
+                nav.popBackStack()
+            },
+            onDismiss = { showDelete = false }
+        )
+    }
+}
+
+/**
+ * Split one transaction into 2+ parts, each with its own amount and category.
+ * The part amounts must add up to the original amount.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SplitDialog(
+    original: Txn,
+    categories: List<com.neeraj.fin.data.db.Category>,
+    currency: String,
+    onSplit: (List<Pair<Long, Long?>>) -> Unit,
+    onDismiss: () -> Unit
+) {
+    data class Part(var amountText: String, var categoryId: Long?)
+
+    val parts = remember {
+        androidx.compose.runtime.mutableStateListOf(
+            Part("%.2f".format(original.amountMinor / 100.0).removeSuffix(".00"), original.categoryId),
+            Part("", null)
+        )
+    }
+    val amounts = parts.map { Format.parseAmount(it.amountText) }
+    val total = amounts.filterNotNull().sum()
+    val valid = amounts.all { it != null } && total == original.amountMinor && parts.size >= 2
+    val remaining = original.amountMinor - total
+
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        androidx.compose.material3.Surface(shape = MaterialTheme.shapes.extraLarge, tonalElevation = 6.dp) {
+            Column(
+                Modifier.padding(20.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                        "Split ${Format.money(original.amountMinor, currency)}",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                    parts.forEachIndexed { index, part ->
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedTextField(
+                                value = part.amountText,
+                                onValueChange = { parts[index] = part.copy(amountText = it) },
+                                label = { Text("Part ${index + 1} amount") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                categories.forEach { c ->
+                                    FilterChip(
+                                        selected = part.categoryId == c.id,
+                                        onClick = {
+                                            parts[index] = part.copy(
+                                                categoryId = if (part.categoryId == c.id) null else c.id
+                                            )
+                                        },
+                                        label = { Text("${c.emoji} ${c.name}") }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        TextButton(onClick = { parts.add(Part("", null)) }) { Text("+ Add part") }
+                        Spacer(Modifier.weight(1f))
+                        Text(
+                            if (remaining == 0L) "Adds up ✓"
+                            else "${if (remaining > 0) "Remaining" else "Over by"} ${Format.money(kotlin.math.abs(remaining), currency)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (remaining == 0L) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                        )
+                    }
+                    Row(Modifier.fillMaxWidth()) {
+                        Spacer(Modifier.weight(1f))
+                        TextButton(onClick = onDismiss) { Text("Cancel") }
+                        TextButton(
+                            onClick = { onSplit(parts.map { Format.parseAmount(it.amountText)!! to it.categoryId }) },
+                            enabled = valid
+                        ) { Text("Split") }
+                    }
+            }
+        }
+    }
+}

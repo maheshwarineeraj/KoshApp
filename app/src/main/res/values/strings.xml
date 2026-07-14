@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Kosh</string>
+    <string name="widget_description">This month\'s income, expenses and net at a glance</string>
+</resources>
