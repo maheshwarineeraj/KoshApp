@@ -15,6 +15,7 @@ class DailyWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
     override suspend fun doWork(): Result {
         val app = applicationContext as FinApp
         runCatching { app.repository.applyDueRecurringRules() }
+        runCatching { app.backupManager.autoBackupIfDue() }
         runCatching { Notifications.checkBudgets(app) }
         runCatching { Notifications.reviewNudge(app) }
         runCatching { Notifications.monthlySummary(app) }

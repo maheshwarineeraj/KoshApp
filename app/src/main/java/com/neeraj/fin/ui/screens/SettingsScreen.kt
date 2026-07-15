@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -66,6 +67,9 @@ fun SettingsScreen(vm: AppViewModel, nav: NavController) {
     val notificationsEnabled by vm.notificationsEnabled.collectAsState()
     val blockScreenshots by vm.blockScreenshots.collectAsState()
     val notificationCapture by vm.notificationCapture.collectAsState()
+    val autoBackupFolder by vm.autoBackupFolder.collectAsState()
+    val autoBackupFrequency by vm.autoBackupFrequency.collectAsState()
+    val autoBackupLast by vm.autoBackupLast.collectAsState()
     val hasNotifAccess = androidx.core.app.NotificationManagerCompat
         .getEnabledListenerPackages(context).contains(context.packageName)
 
@@ -87,6 +91,25 @@ fun SettingsScreen(vm: AppViewModel, nav: NavController) {
     var showImportDialog by remember { mutableStateOf<android.net.Uri?>(null) }
     var showCurrencyDialog by remember { mutableStateOf(false) }
     var showScanDialog by remember { mutableStateOf(false) }
+
+    // Auto backup setup: passphrase + frequency first, then the folder picker.
+    var showAutoBackupSetup by remember { mutableStateOf(false) }
+    var showAutoBackupManage by remember { mutableStateOf(false) }
+    var pendingAutoPass by remember { mutableStateOf("") }
+    var pendingAutoFreq by remember { mutableStateOf("WEEKLY") }
+    val autoBackupFolderLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri != null && pendingAutoPass.isNotEmpty()) {
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            )
+            vm.enableAutoBackup(uri.toString(), pendingAutoPass, pendingAutoFreq)
+        }
+        pendingAutoPass = ""
+    }
 
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/octet-stream")
@@ -274,6 +297,20 @@ fun SettingsScreen(vm: AppViewModel, nav: NavController) {
                 importLauncher.launch(arrayOf("*/*"))
             }
             HorizontalDivider()
+            if (autoBackupFolder == null) {
+                SettingRow(
+                    Icons.Filled.CloudUpload, "Auto backup",
+                    "Save an encrypted backup to a Drive/OneDrive folder every week or month"
+                ) { showAutoBackupSetup = true }
+            } else {
+                SettingRow(
+                    Icons.Filled.CloudUpload,
+                    "Auto backup — " + (if (autoBackupFrequency == "MONTHLY") "monthly" else "weekly"),
+                    "To \"${folderLabel(autoBackupFolder!!)}\"" +
+                        (autoBackupLast?.let { " · last: $it" } ?: " · no backup yet")
+                ) { showAutoBackupManage = true }
+            }
+            HorizontalDivider()
             SettingRow(Icons.Filled.Description, "Export CSV", "Plain spreadsheet of all transactions") {
                 csvLauncher.launch("kosh-transactions-${LocalDate.now()}.csv")
             }
@@ -334,6 +371,83 @@ fun SettingsScreen(vm: AppViewModel, nav: NavController) {
         )
     }
 
+    if (showAutoBackupSetup) {
+        var pass by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showAutoBackupSetup = false },
+            title = { Text("Auto backup") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        "Kosh will save an encrypted backup file into a folder you choose — " +
+                            "pick a Google Drive or OneDrive folder to get it off this device automatically.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = pendingAutoFreq == "WEEKLY",
+                            onClick = { pendingAutoFreq = "WEEKLY" },
+                            label = { Text("Weekly") }
+                        )
+                        FilterChip(
+                            selected = pendingAutoFreq == "MONTHLY",
+                            onClick = { pendingAutoFreq = "MONTHLY" },
+                            label = { Text("Monthly") }
+                        )
+                    }
+                    OutlinedTextField(
+                        value = pass,
+                        onValueChange = { pass = it },
+                        label = { Text("Passphrase") },
+                        supportingText = { Text(if (pass.length < 8) "At least 8 characters" else "✓") },
+                        isError = pass.isNotEmpty() && pass.length < 8,
+                        singleLine = true
+                    )
+                    Text(
+                        "The passphrase is kept on this device so backups can run unattended. " +
+                            "You will need it to restore — write it down somewhere safe.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingAutoPass = pass
+                        showAutoBackupSetup = false
+                        autoBackupFolderLauncher.launch(null)
+                    },
+                    enabled = pass.length >= 8
+                ) { Text("Choose folder") }
+            },
+            dismissButton = { TextButton(onClick = { showAutoBackupSetup = false }) { Text("Cancel") } }
+        )
+    }
+
+    if (showAutoBackupManage) {
+        AlertDialog(
+            onDismissRequest = { showAutoBackupManage = false },
+            title = { Text("Auto backup") },
+            text = {
+                Text(
+                    "Backups are written to \"${autoBackupFolder?.let { folderLabel(it) }}\" " +
+                        (if (autoBackupFrequency == "MONTHLY") "every month." else "every week.") +
+                        (autoBackupLast?.let { "\nLast backup period: $it" } ?: "\nNo backup written yet.")
+                )
+            },
+            confirmButton = {
+                Row {
+                    TextButton(onClick = { vm.runAutoBackupNow(); showAutoBackupManage = false }) { Text("Back up now") }
+                    TextButton(onClick = { vm.disableAutoBackup(); showAutoBackupManage = false }) {
+                        Text("Turn off", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            },
+            dismissButton = { TextButton(onClick = { showAutoBackupManage = false }) { Text("Close") } }
+        )
+    }
+
     if (showCurrencyDialog) {
         AlertDialog(
             onDismissRequest = { showCurrencyDialog = false },
@@ -373,6 +487,12 @@ fun SettingsScreen(vm: AppViewModel, nav: NavController) {
         )
     }
 }
+
+/** Human-readable folder name from a SAF tree URI ("primary:Backups" → "Backups"). */
+private fun folderLabel(treeUri: String): String =
+    android.net.Uri.parse(treeUri).lastPathSegment
+        ?.substringAfterLast(':')?.substringAfterLast('/')
+        ?.ifBlank { null } ?: "chosen folder"
 
 @Composable
 private fun SectionCard(title: String, content: @Composable () -> Unit) {

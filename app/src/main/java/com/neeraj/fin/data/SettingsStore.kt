@@ -21,12 +21,24 @@ class SettingsStore(private val context: Context) {
     private val notifCaptureKey = booleanPreferencesKey("notification_capture")
     private val markersKey = stringSetPreferencesKey("notification_markers")
 
+    // Scheduled auto-export of encrypted backups to a user-chosen SAF folder.
+    // The passphrase must be stored for unattended encryption; it lives in
+    // app-private storage — same trust level as the database it protects.
+    private val autoBackupFolderKey = stringPreferencesKey("auto_backup_folder")
+    private val autoBackupPassKey = stringPreferencesKey("auto_backup_pass")
+    private val autoBackupFreqKey = stringPreferencesKey("auto_backup_freq")
+    private val autoBackupLastKey = stringPreferencesKey("auto_backup_last")
+
     val currencyCode: Flow<String> = context.dataStore.data.map { it[currencyKey] ?: "INR" }
     val smsAutoCapture: Flow<Boolean> = context.dataStore.data.map { it[autoCaptureKey] ?: true }
     val appLock: Flow<Boolean> = context.dataStore.data.map { it[appLockKey] ?: false }
     val notificationsEnabled: Flow<Boolean> = context.dataStore.data.map { it[notificationsKey] ?: false }
     val blockScreenshots: Flow<Boolean> = context.dataStore.data.map { it[blockScreenshotsKey] ?: true }
     val notificationCapture: Flow<Boolean> = context.dataStore.data.map { it[notifCaptureKey] ?: false }
+    val autoBackupFolder: Flow<String?> = context.dataStore.data.map { it[autoBackupFolderKey] }
+    val autoBackupPassphrase: Flow<String?> = context.dataStore.data.map { it[autoBackupPassKey] }
+    val autoBackupFrequency: Flow<String> = context.dataStore.data.map { it[autoBackupFreqKey] ?: "WEEKLY" }
+    val autoBackupLast: Flow<String?> = context.dataStore.data.map { it[autoBackupLastKey] }
 
     suspend fun setCurrencyCode(code: String) {
         context.dataStore.edit { it[currencyKey] = code }
@@ -50,6 +62,30 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setNotificationCapture(enabled: Boolean) {
         context.dataStore.edit { it[notifCaptureKey] = enabled }
+    }
+
+    suspend fun enableAutoBackup(folderUri: String, passphrase: String, frequency: String) {
+        context.dataStore.edit {
+            it[autoBackupFolderKey] = folderUri
+            it[autoBackupPassKey] = passphrase
+            it[autoBackupFreqKey] = frequency
+            it.remove(autoBackupLastKey)
+        }
+    }
+
+    suspend fun disableAutoBackup() {
+        context.dataStore.edit {
+            it.remove(autoBackupFolderKey)
+            it.remove(autoBackupPassKey)
+            it.remove(autoBackupFreqKey)
+            it.remove(autoBackupLastKey)
+        }
+    }
+
+    suspend fun setAutoBackupLast(key: String?) {
+        context.dataStore.edit {
+            if (key == null) it.remove(autoBackupLastKey) else it[autoBackupLastKey] = key
+        }
     }
 
     // One-shot markers so alerts fire once per period (e.g. "budget:3:2026-07-01:80").

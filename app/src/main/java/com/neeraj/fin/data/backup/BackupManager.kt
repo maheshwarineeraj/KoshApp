@@ -135,6 +135,42 @@ class BackupManager(
         } ?: throw IllegalStateException("Cannot open backup destination")
     }
 
+    /**
+     * Scheduled auto-export: writes a dated encrypted backup into the user's
+     * chosen SAF folder once per period (ISO week or calendar month). Returns
+     * true when a new backup file was written. Failures (folder permission
+     * revoked, provider offline) are swallowed — the next daily run retries.
+     */
+    suspend fun autoBackupIfDue(force: Boolean = false): Boolean = withContext(Dispatchers.IO) {
+        val folder = settings.autoBackupFolder.first() ?: return@withContext false
+        val pass = settings.autoBackupPassphrase.first() ?: return@withContext false
+        val today = java.time.LocalDate.now()
+        val key = if (settings.autoBackupFrequency.first() == "MONTHLY") {
+            "%04d-%02d".format(today.year, today.monthValue)
+        } else {
+            "%04d-W%02d".format(
+                today.get(java.time.temporal.IsoFields.WEEK_BASED_YEAR),
+                today.get(java.time.temporal.IsoFields.WEEK_OF_WEEK_BASED_YEAR)
+            )
+        }
+        if (!force && settings.autoBackupLast.first() == key) return@withContext false
+
+        val treeUri = Uri.parse(folder)
+        val fileUri = runCatching {
+            val parent = android.provider.DocumentsContract.buildDocumentUriUsingTree(
+                treeUri, android.provider.DocumentsContract.getTreeDocumentId(treeUri)
+            )
+            android.provider.DocumentsContract.createDocument(
+                context.contentResolver, parent, "application/octet-stream",
+                "kosh-auto-backup-$today.finbak"
+            )
+        }.getOrNull() ?: return@withContext false
+
+        val ok = runCatching { export(fileUri, pass.toCharArray()) }.isSuccess
+        if (ok) settings.setAutoBackupLast(key)
+        ok
+    }
+
     suspend fun import(uri: Uri, passphrase: CharArray) = withContext(Dispatchers.IO) {
         val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
             ?: throw IllegalStateException("Cannot open backup file")

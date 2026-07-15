@@ -78,6 +78,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val notificationCapture: StateFlow<Boolean> =
         app.settings.notificationCapture.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
+    val autoBackupFolder: StateFlow<String?> =
+        app.settings.autoBackupFolder.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    val autoBackupFrequency: StateFlow<String> =
+        app.settings.autoBackupFrequency.stateIn(viewModelScope, SharingStarted.Eagerly, "WEEKLY")
+
+    val autoBackupLast: StateFlow<String?> =
+        app.settings.autoBackupLast.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message
     fun consumeMessage() { _message.value = null }
@@ -130,6 +139,23 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setNotificationCapture(enabled: Boolean) =
         viewModelScope.launch { app.settings.setNotificationCapture(enabled) }
+
+    fun enableAutoBackup(folderUri: String, passphrase: String, frequency: String) =
+        viewModelScope.launch {
+            app.settings.enableAutoBackup(folderUri, passphrase, frequency)
+            val ok = app.backupManager.autoBackupIfDue(force = true)
+            toast(if (ok) "Auto backup on — first backup saved" else "Auto backup on — first backup failed, will retry daily")
+        }
+
+    fun disableAutoBackup() = viewModelScope.launch {
+        app.settings.disableAutoBackup()
+        toast("Auto backup turned off")
+    }
+
+    fun runAutoBackupNow() = viewModelScope.launch {
+        val ok = app.backupManager.autoBackupIfDue(force = true)
+        toast(if (ok) "Backup saved" else "Backup failed — check the folder still exists")
+    }
 
     fun importTransactionsCsv(uri: Uri) = viewModelScope.launch {
         runCatching { app.backupManager.importTransactionsCsv(uri) }
