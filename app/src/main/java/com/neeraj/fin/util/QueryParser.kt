@@ -29,6 +29,13 @@ object QueryParser {
             get() = amountMinor != null || fromMillis != null || type != null
     }
 
+    /** Light stemmer so "payments" matches "payment", "bills" matches "bill". */
+    fun stem(word: String): String = when {
+        word.length > 4 && word.endsWith("es") -> word.dropLast(2)
+        word.length > 3 && word.endsWith("s") -> word.dropLast(1)
+        else -> word
+    }
+
     private val expenseWords = setOf("paid", "pay", "payed", "spent", "spend", "debited", "expense", "expenses", "bought", "purchase", "purchased")
     private val incomeWords = setOf("received", "credited", "income", "earned", "got", "salary", "refund", "refunded")
     private val transferWords = setOf("transfer", "transferred", "moved")

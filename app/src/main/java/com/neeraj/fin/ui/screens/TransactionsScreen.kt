@@ -61,10 +61,27 @@ fun TransactionsScreen(vm: AppViewModel, nav: NavController) {
 
     // Natural-language search: "advance tax 20K in Q2 last year", "swiggy last month".
     val parsed = remember(query) { if (query.isBlank()) null else QueryParser.parse(query) }
-    val filtered = txns.filter { t ->
+    val chipFiltered = txns.filter { t ->
         (typeFilter == null || t.type == typeFilter) &&
-            (categoryFilter == null || t.categoryId == categoryFilter) &&
-            (parsed == null || matches(t, parsed, catById[t.categoryId]?.name))
+            (categoryFilter == null || t.categoryId == categoryFilter)
+    }
+    // Score text terms: prefer transactions matching every word; if none do,
+    // fall back to the closest matches (at least half the words) so a query
+    // like "credit card bill payments" still finds "Credit card bill".
+    var partialResults = false
+    val filtered = if (parsed == null) chipFiltered else {
+        val scored = chipFiltered.mapNotNull { t ->
+            score(t, parsed, catById[t.categoryId]?.name)?.let { t to it }
+        }
+        val need = parsed.terms.size
+        val strict = scored.filter { it.second >= need }
+        if (strict.isNotEmpty() || need == 0) strict.map { it.first }
+        else {
+            partialResults = true
+            scored.filter { it.second >= (need + 1) / 2 }
+                .sortedByDescending { it.second }
+                .map { it.first }
+        }
     }
     val grouped = filtered.groupBy { Format.toLocalDate(it.timestamp) }
 
@@ -107,9 +124,10 @@ fun TransactionsScreen(vm: AppViewModel, nav: NavController) {
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                 singleLine = true
             )
-            if (parsed != null && parsed.isStructured) {
+            if (parsed != null && (parsed.isStructured || partialResults)) {
                 Text(
-                    "Searching: " + parsed.understood.joinToString(" · "),
+                    (if (parsed.isStructured) "Searching: " + parsed.understood.joinToString(" · ") else "") +
+                        (if (partialResults) (if (parsed.isStructured) " · " else "") + "showing closest matches" else ""),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp)
@@ -192,22 +210,24 @@ fun TransactionsScreen(vm: AppViewModel, nav: NavController) {
     }
 }
 
-/** Apply a parsed natural-language query to one transaction. */
-private fun matches(t: Txn, q: QueryParser.Parsed, categoryName: String?): Boolean {
-    if (q.type != null && t.type != q.type) return false
-    if (q.fromMillis != null && t.timestamp < q.fromMillis) return false
-    if (q.toMillis != null && t.timestamp >= q.toMillis) return false
+/**
+ * Apply a parsed query to one transaction. Structured constraints (type,
+ * period, amount) are strict; returns null when they fail. Otherwise returns
+ * how many text terms matched (plural-insensitive).
+ */
+private fun score(t: Txn, q: QueryParser.Parsed, categoryName: String?): Int? {
+    if (q.type != null && t.type != q.type) return null
+    if (q.fromMillis != null && t.timestamp < q.fromMillis) return null
+    if (q.toMillis != null && t.timestamp >= q.toMillis) return null
     if (q.amountMinor != null) {
         val ok = when {
             q.amountIsMin -> t.amountMinor >= q.amountMinor
             q.amountIsMax -> t.amountMinor <= q.amountMinor
             else -> t.amountMinor == q.amountMinor
         }
-        if (!ok) return false
+        if (!ok) return null
     }
-    if (q.terms.isNotEmpty()) {
-        val hay = "${t.merchant} ${t.note} ${categoryName.orEmpty()}".lowercase()
-        if (!q.terms.all { hay.contains(it) }) return false
-    }
-    return true
+    if (q.terms.isEmpty()) return 0
+    val hay = "${t.merchant} ${t.note} ${categoryName.orEmpty()}".lowercase()
+    return q.terms.count { hay.contains(it) || hay.contains(QueryParser.stem(it)) }
 }

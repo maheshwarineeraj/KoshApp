@@ -150,6 +150,23 @@ fun WealthScreen(vm: AppViewModel) {
                 }
             }
 
+            if (assets.isNotEmpty()) {
+                val digest = buildWealthDigest(assets, values, netWorth, totalLiabilities, currency)
+                if (digest.isNotEmpty()) {
+                    item {
+                        Card(
+                            Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                        ) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text("In short", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                digest.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                            }
+                        }
+                    }
+                }
+            }
+
             if (assets.isEmpty()) {
                 item {
                     EmptyState(
@@ -328,6 +345,44 @@ private fun AssetRow(asset: Asset, valueMinor: Long, currency: String, onClick: 
             }
         }
     }
+}
+
+/** Plain-language wealth summary vs one month ago, from recorded value history. */
+private fun buildWealthDigest(
+    assets: List<Asset>,
+    values: List<AssetValue>,
+    netWorth: Long,
+    totalLiabilities: Long,
+    currency: String
+): List<String> {
+    val lines = mutableListOf<String>()
+    val monthAgo = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
+    val hasHistory = values.any { it.timestamp <= monthAgo }
+    if (hasHistory) {
+        val then = netWorthAt(assets, values, monthAgo)
+        val delta = netWorth - then
+        if (then != 0L && delta != 0L) {
+            val pct = delta * 100 / kotlin.math.abs(then)
+            lines += "Net worth is ${if (delta > 0) "up" else "down"} " +
+                "${Format.compact(kotlin.math.abs(delta), currency)} ($pct%) over the last month."
+        }
+        // Biggest mover among individual holdings in the same window.
+        val byAsset = values.groupBy { it.assetId }
+        assets.filter { !it.isLiability }.mapNotNull { a ->
+            val vs = byAsset[a.id] ?: return@mapNotNull null
+            val now = vs.maxByOrNull { it.timestamp }?.valueMinor ?: return@mapNotNull null
+            val old = vs.filter { it.timestamp <= monthAgo }.maxByOrNull { it.timestamp }?.valueMinor
+                ?: return@mapNotNull null
+            a to (now - old)
+        }.maxByOrNull { kotlin.math.abs(it.second) }?.takeIf { it.second != 0L }?.let { (a, d) ->
+            lines += "Biggest mover: ${AssetType.meta(a.type).emoji} ${a.name} " +
+                "(${if (d > 0) "+" else "−"}${Format.compact(kotlin.math.abs(d), currency)})."
+        }
+    }
+    if (totalLiabilities > 0 && netWorth > 0) {
+        lines += "Liabilities are ${totalLiabilities * 100 / (netWorth + totalLiabilities)}% of what you own."
+    }
+    return lines
 }
 
 /** Net worth at a point in time: latest recorded value per asset at or before [atMillis]. */
