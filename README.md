@@ -5,7 +5,8 @@ Kosh (कोश — "treasury") tracks your income, expenses, savings goals, and
 ## Features
 
 ### Money in / money out
-- **SMS capture with approval** — a broadcast receiver parses incoming bank/UPI SMS in real time (Indian formats: `debited`, `credited`, `Rs./INR/₹`, A/c tails, VPAs). You can also scan your existing inbox (1 month / 3 months / 1 year) from More. Nothing is added without your explicit approval; each item can be edited or rejected in the Review queue (reachable from both Home and Activity). OTPs, offers, payment requests, and balance alerts are filtered out.
+- **SMS capture with approval** — a broadcast receiver parses incoming bank/UPI SMS in real time (Indian formats: `debited`, `credited`, `Rs./INR/₹`, A/c tails, VPAs). You can also scan your existing inbox (1 month / 3 months / 1 year) from More. Nothing is added without your explicit approval; each item can be edited or rejected in the Review queue (reachable from both Home and Activity). OTPs, offers, payment requests, balance alerts, IPO/ASBA blocks, and mandates are filtered out.
+- **Smarter parsing of messy real-world SMS** — limit/balance figures ("Avl Limit: INR …") are never mistaken for the transaction amount; foreign-currency spends ("USD 23.60 spent…") are captured with the foreign value and flagged so you can correct it to INR; credit-card bill payments are suggested as *transfers* (the card-side "payment received" confirmation is dropped); and when a bank reports the same transaction in two SMS, the second report (same amount, same direction, within 10 minutes) is skipped.
 - **Manual entry** — add/edit/delete transactions with amount, type, category, merchant, note, and date.
 - **Categories** — 20 sensible defaults with emoji + color; create, edit, and delete your own.
 - **Auto-categorization** — merchant keywords (Swiggy → Food, Netflix → Entertainment, BigBasket → Groceries, salary → Income, …) suggest a category for each detected SMS.

@@ -65,7 +65,10 @@ data class PendingSms(
     val accountTail: String?,
     val suggestedCategoryId: Long?,
     val smsHash: Long,
-    val status: String = PendingStatus.PENDING
+    val status: String = PendingStatus.PENDING,
+    // ISO code when the SMS reported a foreign-currency spend; amountMinor is then
+    // the foreign value and the user should correct it to INR when approving.
+    val foreignCurrency: String? = null
 )
 
 @Entity(tableName = "budgets")

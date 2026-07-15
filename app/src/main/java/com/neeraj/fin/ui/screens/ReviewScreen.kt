@@ -125,12 +125,26 @@ private fun PendingCard(item: PendingSms, vm: AppViewModel, currency: String) {
                 modifier = Modifier.fillMaxWidth()
             )
 
+            if (item.foreignCurrency != null) {
+                Text(
+                    "⚠️ Spent in ${item.foreignCurrency} — amount shows the ${item.foreignCurrency} value. " +
+                        "Edit it to the amount charged in your currency before approving.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+
             if (!expanded) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                     Text(
-                        (if (type == TxnType.EXPENSE) "Expense" else "Income") +
+                        when (type) {
+                            TxnType.EXPENSE -> "Expense"
+                            TxnType.INCOME -> "Income"
+                            else -> "Transfer"
+                        } +
                             " · ${merchant.ifBlank { "Unknown" }}" +
-                            (selectedCat?.let { " · ${it.emoji} ${it.name}" } ?: " · Uncategorized"),
+                            (if (type == TxnType.TRANSFER) ""
+                            else selectedCat?.let { " · ${it.emoji} ${it.name}" } ?: " · Uncategorized"),
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.weight(1f)
                     )
@@ -150,13 +164,18 @@ private fun PendingCard(item: PendingSms, vm: AppViewModel, currency: String) {
                     SegmentedButton(
                         selected = type == TxnType.EXPENSE,
                         onClick = { type = TxnType.EXPENSE; categoryId = null },
-                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3)
                     ) { Text("Expense") }
                     SegmentedButton(
                         selected = type == TxnType.INCOME,
                         onClick = { type = TxnType.INCOME; categoryId = null },
-                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3)
                     ) { Text("Income") }
+                    SegmentedButton(
+                        selected = type == TxnType.TRANSFER,
+                        onClick = { type = TxnType.TRANSFER; categoryId = null },
+                        shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3)
+                    ) { Text("Transfer") }
                 }
                 OutlinedTextField(
                     value = amountText,

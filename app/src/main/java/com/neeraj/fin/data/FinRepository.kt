@@ -134,6 +134,12 @@ class FinRepository(private val db: AppDatabase) {
         val hash = SmsParser.smsHash(sender, body, timestamp)
         if (db.pendingSmsDao().existsByHash(hash)) return false
         if (db.txnDao().existsBySmsHash(hash)) return false
+        // Banks often report one transaction twice (debit alert + payment confirmation,
+        // bank SMS + card-network SMS). Same amount, same direction, within 10 minutes
+        // of an already-seen SMS item ⇒ treat as a duplicate report and skip.
+        val window = 10L * 60 * 1000
+        if (db.pendingSmsDao().existsSimilar(parsed.amountMinor, parsed.type, timestamp - window, timestamp + window)) return false
+        if (db.txnDao().existsSimilarSms(parsed.amountMinor, parsed.type, timestamp - window, timestamp + window)) return false
         val suggested = suggestCategory(parsed)
         val row = PendingSms(
             sender = sender,
@@ -144,7 +150,8 @@ class FinRepository(private val db: AppDatabase) {
             merchant = parsed.merchant,
             accountTail = parsed.accountTail,
             suggestedCategoryId = suggested?.id,
-            smsHash = hash
+            smsHash = hash,
+            foreignCurrency = parsed.foreignCurrency
         )
         return db.pendingSmsDao().insert(row) != -1L
     }

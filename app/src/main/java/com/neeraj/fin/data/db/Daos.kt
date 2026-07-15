@@ -52,6 +52,9 @@ interface TxnDao {
     @Query("SELECT EXISTS(SELECT 1 FROM transactions WHERE smsHash = :hash)")
     suspend fun existsBySmsHash(hash: Long): Boolean
 
+    @Query("SELECT EXISTS(SELECT 1 FROM transactions WHERE source = 'SMS' AND amountMinor = :amountMinor AND type = :type AND timestamp BETWEEN :from AND :to)")
+    suspend fun existsSimilarSms(amountMinor: Long, type: String, from: Long, to: Long): Boolean
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(txn: Txn): Long
 
@@ -87,6 +90,9 @@ interface PendingSmsDao {
 
     @Query("SELECT EXISTS(SELECT 1 FROM pending_sms WHERE smsHash = :hash)")
     suspend fun existsByHash(hash: Long): Boolean
+
+    @Query("SELECT EXISTS(SELECT 1 FROM pending_sms WHERE amountMinor = :amountMinor AND type = :type AND timestamp BETWEEN :from AND :to)")
+    suspend fun existsSimilar(amountMinor: Long, type: String, from: Long, to: Long): Boolean
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(item: PendingSms): Long
