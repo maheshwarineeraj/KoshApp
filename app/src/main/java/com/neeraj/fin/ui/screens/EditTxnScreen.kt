@@ -141,6 +141,29 @@ fun EditTxnScreen(vm: AppViewModel, nav: NavController, txnId: Long) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            if (existing == null) {
+                // Habit-aware prefill: your own repeated (merchant, amount) at this
+                // time of day, offered as a one-tap chip. Purely local statistics.
+                val habit = remember(txns) { habitSuggestion(txns) }
+                if (habit != null && amountText.isBlank() && merchant.isBlank()) {
+                    androidx.compose.material3.AssistChip(
+                        onClick = {
+                            amountText = "%.2f".format(habit.amountMinor / 100.0).removeSuffix(".00")
+                            merchant = habit.merchant
+                            type = habit.type
+                            categoryId = habit.categoryId
+                        },
+                        label = {
+                            Text(
+                                "Usual around now: ${Format.money(habit.amountMinor, currency)}" +
+                                    (habit.merchant.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "") +
+                                    " — tap to fill"
+                            )
+                        }
+                    )
+                }
+            }
+
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                 SegmentedButton(
                     selected = type == TxnType.EXPENSE,
@@ -405,4 +428,31 @@ private fun SplitDialog(
             }
         }
     }
+}
+
+private data class HabitSuggestion(val merchant: String, val amountMinor: Long, val categoryId: Long?, val type: String)
+
+/**
+ * Most frequent (merchant, amount) among your last 60 days of transactions
+ * that happened within ±90 minutes of the current time of day; needs at
+ * least three occurrences to qualify.
+ */
+private fun habitSuggestion(txns: List<com.neeraj.fin.data.db.Txn>): HabitSuggestion? {
+    val now = java.util.Calendar.getInstance()
+    val nowMin = now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE)
+    val cutoff = System.currentTimeMillis() - 60L * 24 * 60 * 60 * 1000
+    val cal = java.util.Calendar.getInstance()
+    return txns.asSequence()
+        .filter { it.timestamp >= cutoff && it.type != com.neeraj.fin.data.db.TxnType.TRANSFER }
+        .filter {
+            cal.timeInMillis = it.timestamp
+            val m = cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + cal.get(java.util.Calendar.MINUTE)
+            val diff = kotlin.math.abs(m - nowMin)
+            kotlin.math.min(diff, 1440 - diff) <= 90
+        }
+        .groupBy { Triple(it.merchant.lowercase(), it.amountMinor, it.type) }
+        .filterValues { it.size >= 3 }
+        .maxByOrNull { it.value.size }
+        ?.value?.first()
+        ?.let { HabitSuggestion(it.merchant, it.amountMinor, it.categoryId, it.type) }
 }

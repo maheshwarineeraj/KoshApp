@@ -73,10 +73,24 @@ fun ReviewScreen(vm: AppViewModel, nav: NavController) {
                 )
             }
         } else {
+            // High-confidence items: parser found a merchant we could categorize,
+            // or a transfer suggestion — safe to bulk-approve in one tap.
+            val confident = pending.filter {
+                it.foreignCurrency == null &&
+                    (it.suggestedCategoryId != null || it.type == TxnType.TRANSFER)
+            }
             LazyColumn(
                 Modifier.fillMaxSize().padding(padding),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                if (confident.size >= 2) {
+                    item {
+                        Button(
+                            onClick = { vm.approveAllSuggested(confident) },
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                        ) { Text("Approve all suggested (${confident.size})") }
+                    }
+                }
                 items(pending.size, key = { pending[it].id }) { i ->
                     PendingCard(pending[i], vm, currency)
                 }

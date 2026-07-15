@@ -170,6 +170,9 @@ class FinRepository(private val db: AppDatabase) {
             ?: all.firstOrNull { it.name.equals(name, ignoreCase = true) }
     }
 
+    suspend fun lastCategoryForMerchant(merchant: String): Long? =
+        db.txnDao().lastCategoryForMerchant(merchant)
+
     suspend fun approvePending(item: PendingSms, amountMinor: Long, type: String, categoryId: Long?, merchant: String, note: String) {
         db.txnDao().insert(
             Txn(
@@ -293,4 +296,6 @@ class FinRepository(private val db: AppDatabase) {
         }
 
     suspend fun assetsOnce() = db.assetDao().allOnce()
+
+    suspend fun valuesOnce() = db.assetDao().valuesOnce()
 }

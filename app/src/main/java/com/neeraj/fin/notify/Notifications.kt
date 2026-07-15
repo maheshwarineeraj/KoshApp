@@ -133,4 +133,45 @@ object Notifications {
             "Income ${Format.money(income, currency)} · Spent ${Format.money(expense, currency)} · Net ${Format.money(income - expense, currency)}"
         )
     }
+
+    /**
+     * Nudge to refresh stale wealth values, tuned to each asset type's
+     * volatility: markets/accounts ~monthly, deposits ~quarterly, property
+     * ~yearly. Fires at most once per calendar month.
+     */
+    suspend fun staleAssetNudge(app: FinApp) {
+        if (!app.settings.notificationsEnabled.first()) return
+        val monthKey = LocalDate.now().let { "%04d-%02d".format(it.year, it.monthValue) }
+        val marker = "staleAssets:$monthKey"
+        if (app.settings.isMarkerSet(marker)) return
+
+        val now = System.currentTimeMillis()
+        val day = 24L * 60 * 60 * 1000
+        fun thresholdFor(type: String): Long = when (type) {
+            com.neeraj.fin.data.db.AssetType.MUTUAL_FUND,
+            com.neeraj.fin.data.db.AssetType.STOCKS,
+            com.neeraj.fin.data.db.AssetType.CRYPTO,
+            com.neeraj.fin.data.db.AssetType.BANK,
+            com.neeraj.fin.data.db.AssetType.CASH,
+            com.neeraj.fin.data.db.AssetType.CREDIT_CARD -> 35 * day
+            com.neeraj.fin.data.db.AssetType.PROPERTY,
+            com.neeraj.fin.data.db.AssetType.OTHER -> 370 * day
+            else -> 100 * day // FD, EPF/PPF, gold, loans, other dues
+        }
+        val latestByAsset = app.repository.valuesOnce().groupBy { it.assetId }
+            .mapValues { (_, vs) -> vs.maxOf { it.timestamp } }
+        val stale = app.repository.assetsOnce().filter { a ->
+            val last = latestByAsset[a.id] ?: return@filter false
+            now - last > thresholdFor(a.type)
+        }
+        if (stale.isEmpty()) return
+        app.settings.setMarker(marker)
+        val names = stale.take(3).joinToString(", ") { it.name } +
+            if (stale.size > 3) " +${stale.size - 3} more" else ""
+        post(
+            app, CHANNEL_SUMMARY, 4000,
+            "Wealth values need a refresh",
+            "$names — update them so your net worth trend stays accurate."
+        )
+    }
 }

@@ -241,6 +241,7 @@ private fun OverviewTab(vm: AppViewModel) {
             item {
                 // Likely subscriptions: same merchant, same amount, ~monthly cadence (all-time scan)
                 val allTxns by vm.transactions.collectAsState()
+                val recurringRules by vm.recurringRules.collectAsState()
                 val subscriptions = remember(allTxns) { detectSubscriptions(allTxns) }
                 if (subscriptions.isNotEmpty()) {
                     Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
@@ -256,11 +257,23 @@ private fun OverviewTab(vm: AppViewModel) {
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
-                                    Text(
-                                        "${Format.money(sub.amountMinor, currency)}/mo",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        Text(
+                                            "${Format.money(sub.amountMinor, currency)}/mo",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        if (recurringRules.none {
+                                                it.merchant.equals(sub.merchant, ignoreCase = true) &&
+                                                    it.amountMinor == sub.amountMinor
+                                            }
+                                        ) {
+                                            androidx.compose.material3.TextButton(
+                                                onClick = { vm.makeRecurringFromSubscription(sub.merchant, sub.amountMinor, sub.nextExpected) },
+                                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                                            ) { Text("Make recurring") }
+                                        }
+                                    }
                                 }
                             }
                             Text(

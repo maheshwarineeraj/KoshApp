@@ -61,6 +61,7 @@ fun TransactionsScreen(vm: AppViewModel, nav: NavController) {
 
     // Natural-language search: "advance tax 20K in Q2 last year", "swiggy last month".
     val parsed = remember(query) { if (query.isBlank()) null else QueryParser.parse(query) }
+    val synonyms by vm.searchSynonyms.collectAsState()
     val chipFiltered = txns.filter { t ->
         (typeFilter == null || t.type == typeFilter) &&
             (categoryFilter == null || t.categoryId == categoryFilter)
@@ -71,7 +72,7 @@ fun TransactionsScreen(vm: AppViewModel, nav: NavController) {
     var partialResults = false
     val filtered = if (parsed == null) chipFiltered else {
         val scored = chipFiltered.mapNotNull { t ->
-            score(t, parsed, catById[t.categoryId]?.name)?.let { t to it }
+            score(t, parsed, catById[t.categoryId]?.name, synonyms)?.let { t to it }
         }
         val need = parsed.terms.size
         val strict = scored.filter { it.second >= need }
@@ -200,7 +201,16 @@ fun TransactionsScreen(vm: AppViewModel, nav: NavController) {
                         }
                         items(dayTxns.size, key = { i -> dayTxns[i].id }) { i ->
                             val t = dayTxns[i]
-                            TxnRow(t, catById[t.categoryId], currency) { nav.navigate("edit/${t.id}") }
+                            TxnRow(t, catById[t.categoryId], currency) {
+                                // Learn vocabulary: opening a result whose text didn't
+                                // contain a query word teaches "word → this merchant".
+                                if (parsed != null && t.merchant.isNotBlank()) {
+                                    val hay = "${t.merchant} ${t.note} ${catById[t.categoryId]?.name.orEmpty()}".lowercase()
+                                    parsed.terms.filter { !hay.contains(it) && !hay.contains(QueryParser.stem(it)) }
+                                        .forEach { vm.learnSearchSynonym(it, t.merchant.lowercase()) }
+                                }
+                                nav.navigate("edit/${t.id}")
+                            }
                         }
                     }
                     item { Spacer(Modifier.height(88.dp)) }
@@ -215,7 +225,7 @@ fun TransactionsScreen(vm: AppViewModel, nav: NavController) {
  * period, amount) are strict; returns null when they fail. Otherwise returns
  * how many text terms matched (plural-insensitive).
  */
-private fun score(t: Txn, q: QueryParser.Parsed, categoryName: String?): Int? {
+private fun score(t: Txn, q: QueryParser.Parsed, categoryName: String?, synonyms: Set<String> = emptySet()): Int? {
     if (q.type != null && t.type != q.type) return null
     if (q.fromMillis != null && t.timestamp < q.fromMillis) return null
     if (q.toMillis != null && t.timestamp >= q.toMillis) return null
@@ -229,5 +239,10 @@ private fun score(t: Txn, q: QueryParser.Parsed, categoryName: String?): Int? {
     }
     if (q.terms.isEmpty()) return 0
     val hay = "${t.merchant} ${t.note} ${categoryName.orEmpty()}".lowercase()
-    return q.terms.count { hay.contains(it) || hay.contains(QueryParser.stem(it)) }
+    return q.terms.count { term ->
+        hay.contains(term) || hay.contains(QueryParser.stem(term)) ||
+            synonyms.any { s ->
+                s.startsWith("$term>") && hay.contains(s.substringAfter('>'))
+            }
+    }
 }

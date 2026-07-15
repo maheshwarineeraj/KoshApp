@@ -227,6 +227,19 @@ fun HomeScreen(vm: AppViewModel, nav: NavController) {
             }
 
             item {
+                // Personal baseline: this month's pace vs your own average pace
+                // over the previous three months (same day-of-month cutoff).
+                baselineLine(txns, currency)?.let { line ->
+                    Text(
+                        line,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 20.dp)
+                    )
+                }
+            }
+
+            item {
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -347,4 +360,39 @@ private fun QuickAction(emoji: String, label: String, onClick: () -> Unit) {
             Text(label, style = MaterialTheme.typography.labelLarge)
         }
     }
+}
+
+/**
+ * "You usually spend ~₹X by day N — this month you're at ₹Y." Needs at least
+ * one full previous month of expenses; compares month-to-date spend against
+ * the average of the previous three months at the same day-of-month.
+ */
+private fun baselineLine(txns: List<com.neeraj.fin.data.db.Txn>, currency: String): String? {
+    val zone = java.time.ZoneId.systemDefault()
+    val today = java.time.LocalDate.now()
+    val day = today.dayOfMonth
+    fun spentBetween(from: java.time.LocalDate, toExclusive: java.time.LocalDate): Long {
+        val f = from.atStartOfDay(zone).toInstant().toEpochMilli()
+        val t = toExclusive.atStartOfDay(zone).toInstant().toEpochMilli()
+        return txns.filter {
+            it.type == com.neeraj.fin.data.db.TxnType.EXPENSE && it.timestamp in f until t
+        }.sumOf { it.amountMinor }
+    }
+    val prior = (1..3).mapNotNull { back ->
+        val start = today.withDayOfMonth(1).minusMonths(back.toLong())
+        val cutoff = start.plusDays((day - 1).coerceAtMost(start.lengthOfMonth() - 1).toLong()).plusDays(1)
+        spentBetween(start, cutoff).takeIf { it > 0 }
+    }
+    if (prior.isEmpty()) return null
+    val usual = prior.sum() / prior.size
+    val current = spentBetween(today.withDayOfMonth(1), today.plusDays(1))
+    if (usual <= 0) return null
+    val pct = (current - usual) * 100 / usual
+    val compare = when {
+        pct >= 15 -> "you're $pct% ahead of your usual pace"
+        pct <= -15 -> "you're ${-pct}% below your usual pace"
+        else -> "right on your usual pace"
+    }
+    return "You usually spend ~${com.neeraj.fin.util.Format.compact(usual, currency)} by day $day — " +
+        "this month ${com.neeraj.fin.util.Format.compact(current, currency)}, $compare."
 }

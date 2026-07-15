@@ -14,6 +14,7 @@ import com.neeraj.fin.data.db.GoalContribution
 import com.neeraj.fin.data.db.PendingSms
 import com.neeraj.fin.data.db.RecurringRule
 import com.neeraj.fin.data.db.Txn
+import com.neeraj.fin.data.db.TxnType
 import com.neeraj.fin.notify.Notifications
 import com.neeraj.fin.widget.updateKoshWidget
 import kotlinx.coroutines.flow.Flow
@@ -124,6 +125,33 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         afterTxnChange()
     }
 
+    /** One tap from the subscription detector to a monthly recurring rule. */
+    fun makeRecurringFromSubscription(merchant: String, amountMinor: Long, nextExpected: Long) =
+        viewModelScope.launch {
+            val day = com.neeraj.fin.util.Format.toLocalDate(nextExpected).dayOfMonth.coerceIn(1, 28)
+            val categoryId = repo.lastCategoryForMerchant(merchant)
+            repo.saveRecurringRule(
+                RecurringRule(
+                    amountMinor = amountMinor, type = TxnType.EXPENSE, categoryId = categoryId,
+                    merchant = merchant, note = "", dayOfMonth = day,
+                    startMillis = System.currentTimeMillis(), lastAppliedKey = currentMonthKey()
+                )
+            )
+            toast("Recurring rule created — posts on day $day each month")
+        }
+
+    private fun currentMonthKey(): String {
+        val d = java.time.LocalDate.now()
+        return "%04d-%02d".format(d.year, d.monthValue)
+    }
+
+    /** Bulk-approve pending items that already carry a confident suggestion. */
+    fun approveAllSuggested(items: List<com.neeraj.fin.data.db.PendingSms>) = viewModelScope.launch {
+        items.forEach { repo.approvePending(it, it.amountMinor, it.type, it.suggestedCategoryId, it.merchant, "") }
+        toast("${items.size} transactions approved")
+        afterTxnChange()
+    }
+
     fun deleteRecurringRule(id: Long) = viewModelScope.launch {
         repo.deleteRecurringRule(id)
         toast("Recurring transaction deleted")
@@ -139,6 +167,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setNotificationCapture(enabled: Boolean) =
         viewModelScope.launch { app.settings.setNotificationCapture(enabled) }
+
+    val searchSynonyms: StateFlow<Set<String>> =
+        app.settings.searchSynonyms.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+    fun learnSearchSynonym(term: String, merchant: String) =
+        viewModelScope.launch { app.settings.learnSearchSynonym(term, merchant) }
 
     fun enableAutoBackup(folderUri: String, passphrase: String, frequency: String) =
         viewModelScope.launch {

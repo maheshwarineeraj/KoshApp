@@ -88,6 +88,20 @@ class SettingsStore(private val context: Context) {
         }
     }
 
+    // Search vocabulary learned from behavior: "term>merchant" pairs recorded
+    // when a search result is opened whose text didn't literally contain the
+    // term (e.g. "cab>uber"). Used to widen future matches. Local only.
+    private val searchSynKey = stringSetPreferencesKey("search_synonyms")
+    val searchSynonyms: Flow<Set<String>> = context.dataStore.data.map { it[searchSynKey] ?: emptySet() }
+
+    suspend fun learnSearchSynonym(term: String, merchant: String) {
+        if (term.length < 3 || merchant.isBlank()) return
+        context.dataStore.edit { prefs ->
+            val cur = prefs[searchSynKey] ?: emptySet()
+            prefs[searchSynKey] = (cur + "$term>$merchant").takeLast(200).toSet()
+        }
+    }
+
     // One-shot markers so alerts fire once per period (e.g. "budget:3:2026-07-01:80").
     suspend fun isMarkerSet(marker: String): Boolean =
         context.dataStore.data.first()[markersKey]?.contains(marker) == true
