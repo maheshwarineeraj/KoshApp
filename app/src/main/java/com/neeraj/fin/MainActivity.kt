@@ -13,6 +13,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -102,9 +105,16 @@ class MainActivity : FragmentActivity() {
                 val lockEnabled by app.settings.appLock
                     .map { it as Boolean? }
                     .collectAsState(initial = null)
+                val privacyAccepted by app.settings.privacyAccepted
+                    .map { it as Boolean? }
+                    .collectAsState(initial = null)
                 val unlocked by app.unlocked.collectAsState()
                 when {
-                    lockEnabled == null -> Unit
+                    lockEnabled == null || privacyAccepted == null -> Unit
+                    privacyAccepted == false -> PrivacyConsentScreen(
+                        onAgree = { lifecycleScope.launch { app.settings.setPrivacyAccepted(true) } },
+                        onExit = { finish() }
+                    )
                     lockEnabled == true && !unlocked ->
                         LockScreen(onRequestUnlock = { promptUnlock(app) })
                     else -> FinNav()
@@ -282,6 +292,76 @@ fun FinNav(vm: AppViewModel = viewModel()) {
             composable("recurring") { RecurringScreen(vm, nav) }
                 }
             }
+        }
+    }
+}
+
+/**
+ * First-launch privacy notice. The app is unusable until the user agrees;
+ * "Exit" closes the app. Acceptance is stored once in DataStore.
+ */
+@Composable
+private fun PrivacyConsentScreen(onAgree: () -> Unit, onExit: () -> Unit) {
+    Scaffold(
+        bottomBar = {
+            Row(
+                Modifier.fillMaxWidth().padding(24.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                androidx.compose.material3.OutlinedButton(
+                    onClick = onExit,
+                    modifier = Modifier.weight(1f)
+                ) { Text("Exit") }
+                Button(
+                    onClick = onAgree,
+                    modifier = Modifier.weight(2f)
+                ) { Text("I Agree — Continue") }
+            }
+        }
+    ) { padding ->
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 24.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Spacer(Modifier.padding(top = 24.dp))
+            Text("Your Privacy, First", style = MaterialTheme.typography.headlineMedium)
+            Text(
+                "Kosh is a private, offline finance tracker. Before you start, here is " +
+                    "exactly how your data is handled:",
+                style = MaterialTheme.typography.bodyLarge
+            )
+            PrivacyPoint("📱", "Everything stays on this device", "All transactions, budgets, goals and wealth data live in a local database inside the app's private storage. There is no account, no sign-up, and no server.")
+            PrivacyPoint("🚫", "No internet access — enforced", "The app does not hold the Android INTERNET permission, so it is technically incapable of sending your data anywhere.")
+            PrivacyPoint("✉️", "SMS & notifications, only if you allow", "If you grant access, messages are scanned on-device to detect bank transactions. Personal messages, OTPs and offers are ignored and never stored. Every detected transaction waits for your approval. You can revoke access anytime.")
+            PrivacyPoint("🔐", "Backups are encrypted", "Backup files are AES-256 encrypted with a passphrase only you know, before they leave the app. Plain-text CSV export exists only as an explicit action by you.")
+            PrivacyPoint("📵", "No analytics, no tracking, no ads", "Kosh contains no analytics SDKs, no crash reporters, no advertising identifiers — nothing that phones home.")
+            PrivacyPoint("🗑️", "Your data, your control", "Uninstalling the app (or clearing its data) permanently deletes everything on the device. Only backups you exported yourself survive.")
+            Text(
+                "By tapping \"I Agree\", you confirm you have read and accept how Kosh " +
+                    "handles your data.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.padding(bottom = 8.dp))
+        }
+    }
+}
+
+@Composable
+private fun PrivacyPoint(emoji: String, title: String, body: String) {
+    Row {
+        Text(emoji, style = MaterialTheme.typography.titleLarge)
+        Column(Modifier.padding(start = 12.dp)) {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            Text(
+                body,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

@@ -17,6 +17,7 @@ class SettingsStore(private val context: Context) {
     private val autoCaptureKey = booleanPreferencesKey("sms_auto_capture")
     private val appLockKey = booleanPreferencesKey("app_lock")
     private val notificationsKey = booleanPreferencesKey("notifications_enabled")
+    private val privacyAcceptedKey = booleanPreferencesKey("privacy_accepted")
     private val blockScreenshotsKey = booleanPreferencesKey("block_screenshots")
     private val notifCaptureKey = booleanPreferencesKey("notification_capture")
     private val markersKey = stringSetPreferencesKey("notification_markers")
@@ -33,6 +34,7 @@ class SettingsStore(private val context: Context) {
     val smsAutoCapture: Flow<Boolean> = context.dataStore.data.map { it[autoCaptureKey] ?: true }
     val appLock: Flow<Boolean> = context.dataStore.data.map { it[appLockKey] ?: false }
     val notificationsEnabled: Flow<Boolean> = context.dataStore.data.map { it[notificationsKey] ?: false }
+    val privacyAccepted: Flow<Boolean> = context.dataStore.data.map { it[privacyAcceptedKey] ?: false }
     val blockScreenshots: Flow<Boolean> = context.dataStore.data.map { it[blockScreenshotsKey] ?: true }
     val notificationCapture: Flow<Boolean> = context.dataStore.data.map { it[notifCaptureKey] ?: false }
     val autoBackupFolder: Flow<String?> = context.dataStore.data.map { it[autoBackupFolderKey] }
@@ -54,6 +56,10 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setNotificationsEnabled(enabled: Boolean) {
         context.dataStore.edit { it[notificationsKey] = enabled }
+    }
+
+    suspend fun setPrivacyAccepted(accepted: Boolean) {
+        context.dataStore.edit { it[privacyAcceptedKey] = accepted }
     }
 
     suspend fun setBlockScreenshots(enabled: Boolean) {

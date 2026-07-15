@@ -92,6 +92,10 @@ fun SettingsScreen(vm: AppViewModel, nav: NavController) {
     var showCurrencyDialog by remember { mutableStateOf(false) }
     var showScanDialog by remember { mutableStateOf(false) }
 
+    // Play-policy prominent disclosure: shown BEFORE the system SMS permission
+    // prompt, every time permission is requested. Holds the action to run on consent.
+    var smsDisclosureAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
     // Auto backup setup: passphrase + frequency first, then the folder picker.
     var showAutoBackupSetup by remember { mutableStateOf(false) }
     var showAutoBackupManage by remember { mutableStateOf(false) }
@@ -216,7 +220,9 @@ fun SettingsScreen(vm: AppViewModel, nav: NavController) {
                 if (hasSmsPermission) "Granted — bank SMS are captured automatically" else "Grant to detect transactions from bank SMS"
             ) {
                 if (!hasSmsPermission) {
-                    permissionLauncher.launch(arrayOf(Manifest.permission.READ_SMS, Manifest.permission.RECEIVE_SMS))
+                    smsDisclosureAction = {
+                        permissionLauncher.launch(arrayOf(Manifest.permission.READ_SMS, Manifest.permission.RECEIVE_SMS))
+                    }
                 }
             }
             HorizontalDivider()
@@ -237,7 +243,9 @@ fun SettingsScreen(vm: AppViewModel, nav: NavController) {
             HorizontalDivider()
             SettingRow(Icons.Filled.Restore, "Scan inbox for past transactions", "Import bank SMS from recent months") {
                 if (hasSmsPermission) showScanDialog = true
-                else permissionLauncher.launch(arrayOf(Manifest.permission.READ_SMS, Manifest.permission.RECEIVE_SMS))
+                else smsDisclosureAction = {
+                    permissionLauncher.launch(arrayOf(Manifest.permission.READ_SMS, Manifest.permission.RECEIVE_SMS))
+                }
             }
             if (pendingCount > 0) {
                 HorizontalDivider()
@@ -368,6 +376,42 @@ fun SettingsScreen(vm: AppViewModel, nav: NavController) {
                 showImportDialog = null
             },
             onDismiss = { showImportDialog = null }
+        )
+    }
+
+    smsDisclosureAction?.let { onConsent ->
+        AlertDialog(
+            onDismissRequest = { smsDisclosureAction = null },
+            icon = { Icon(Icons.Filled.Sms, contentDescription = null) },
+            title = { Text("SMS access & your privacy") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "Kosh reads your SMS to detect bank and UPI transaction messages " +
+                            "and turn them into expense entries that wait for your approval.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        "• 100% on-device. Kosh has no internet permission — message " +
+                            "content cannot leave this phone.\n" +
+                            "• Only transaction alerts are used. Personal messages, OTPs and " +
+                            "offers are ignored and never stored.\n" +
+                            "• Nothing is added to your records without your explicit approval.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        "You can revoke SMS access anytime in Android Settings.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { smsDisclosureAction = null; onConsent() }) { Text("Agree & continue") }
+            },
+            dismissButton = {
+                TextButton(onClick = { smsDisclosureAction = null }) { Text("Not now") }
+            }
         )
     }
 

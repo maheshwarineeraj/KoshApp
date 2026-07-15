@@ -91,7 +91,7 @@ fun HomeScreen(vm: AppViewModel, nav: NavController) {
                 Column(Modifier.padding(horizontal = 16.dp).padding(top = 16.dp)) {
                     Text("Kosh", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                     Text(
-                        "Your money, on your device",
+                        "Your Money, On Your Device",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
