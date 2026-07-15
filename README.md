@@ -30,6 +30,8 @@ Kosh (कोश — "treasury") tracks your income, expenses, savings goals, and
 
 ### Automation & protection
 - **App lock** — biometric / device PIN gate on launch and whenever the app returns from background (BiometricPrompt; devices without a screen lock are never locked out).
+- **Block screenshots** (on by default) — `FLAG_SECURE` keeps balances out of screenshots, screen recordings, and the Recents preview; can be turned off in More → Security.
+- **Notification capture** — an optional `NotificationListenerService` detects transactions from bank-app and messaging notifications, feeding the same parser, dedupe, and approval queue as SMS. This is the Play-Store-compatible path (no SMS permissions needed). Limitation: it only sees notifications posted while enabled — history must come from an SMS inbox scan or a backup restore.
 - **Recurring transactions** — rent, SIPs, salary, subscriptions posted automatically on a chosen day each month; missed months are back-filled on next launch or by the daily background worker.
 - **Smart notifications** (opt-in) — budget alerts at 80%/100% per category (once per month each), a daily "SMS waiting for review" nudge, and a month-end summary on the 1st.
 - **Transfers** — a third transaction type for money moved between your own accounts, excluded from all income/expense stats.
@@ -38,7 +40,7 @@ Kosh (कोश — "treasury") tracks your income, expenses, savings goals, and
 - **Home-screen widget** — this month's net, income, and expenses (Jetpack Glance); tap to open the app.
 
 ### Backup & export
-- *Encrypted backup*: AES-256-GCM, key derived from your passphrase (PBKDF2-HMAC-SHA256, 200k iterations). Saved through the system file picker, so you can write it **directly into Google Drive or OneDrive without the app having any cloud access**. Covers transactions, categories, budgets, assets, value history, goals, and contributions (v2 format; v1 backups still restore).
+- *Encrypted backup*: AES-256-GCM, key derived from your passphrase (PBKDF2-HMAC-SHA256, 200k iterations; 8-character minimum). Saved through the system file picker, so you can write it **directly into Google Drive or OneDrive without the app having any cloud access**. Covers transactions, categories, budgets, assets, value history, goals, and contributions (v2 format; v1 backups still restore).
 - *Restore* from a backup file (replaces current data).
 - *CSV export* of all transactions.
 - *CSV import*: transactions (`date,type,amount,category,merchant,note` — duplicates skipped, unknown categories created) and holdings (`name,platform,type,invested,current` — updates Wealth values in bulk; works with data exported from brokers/CAS tools).

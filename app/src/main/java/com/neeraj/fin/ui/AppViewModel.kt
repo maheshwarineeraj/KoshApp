@@ -72,6 +72,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val smsAutoCapture: StateFlow<Boolean> =
         app.settings.smsAutoCapture.stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
+    val blockScreenshots: StateFlow<Boolean> =
+        app.settings.blockScreenshots.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    val notificationCapture: StateFlow<Boolean> =
+        app.settings.notificationCapture.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message
     fun consumeMessage() { _message.value = null }
@@ -118,6 +124,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setNotificationsEnabled(enabled: Boolean) =
         viewModelScope.launch { app.settings.setNotificationsEnabled(enabled) }
+
+    fun setBlockScreenshots(enabled: Boolean) =
+        viewModelScope.launch { app.settings.setBlockScreenshots(enabled) }
+
+    fun setNotificationCapture(enabled: Boolean) =
+        viewModelScope.launch { app.settings.setNotificationCapture(enabled) }
 
     fun importTransactionsCsv(uri: Uri) = viewModelScope.launch {
         runCatching { app.backupManager.importTransactionsCsv(uri) }

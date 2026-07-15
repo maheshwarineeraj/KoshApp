@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MarkEmailUnread
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Savings
@@ -63,6 +64,10 @@ fun SettingsScreen(vm: AppViewModel, nav: NavController) {
     val pendingCount by vm.pendingCount.collectAsState()
     val appLock by vm.appLock.collectAsState()
     val notificationsEnabled by vm.notificationsEnabled.collectAsState()
+    val blockScreenshots by vm.blockScreenshots.collectAsState()
+    val notificationCapture by vm.notificationCapture.collectAsState()
+    val hasNotifAccess = androidx.core.app.NotificationManagerCompat
+        .getEnabledListenerPackages(context).contains(context.packageName)
 
     var hasSmsPermission by remember {
         mutableStateOf(
@@ -147,6 +152,21 @@ fun SettingsScreen(vm: AppViewModel, nav: NavController) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(Modifier.weight(1f)) {
+                    Text("Block screenshots", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Hide app content in screenshots, screen recordings and Recents",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(checked = blockScreenshots, onCheckedChange = { vm.setBlockScreenshots(it) })
+            }
+            HorizontalDivider()
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
                     Text("Notifications", style = MaterialTheme.typography.bodyLarge)
                     Text(
                         "Budget alerts, review reminders, monthly summary",
@@ -204,6 +224,45 @@ fun SettingsScreen(vm: AppViewModel, nav: NavController) {
             }
         }
 
+        SectionCard("Notification capture") {
+            SettingRow(
+                Icons.Filled.Notifications,
+                "Notification access",
+                if (hasNotifAccess) "Granted — Kosh can read transaction notifications"
+                else "Grant to detect transactions without SMS permission"
+            ) {
+                context.startActivity(
+                    android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                )
+            }
+            HorizontalDivider()
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Capture from notifications", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Detect transactions from bank-app and SMS notifications. " +
+                            "Only new notifications — past messages can't be read this way.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = notificationCapture && hasNotifAccess,
+                    onCheckedChange = { enabled ->
+                        vm.setNotificationCapture(enabled)
+                        if (enabled && !hasNotifAccess) {
+                            context.startActivity(
+                                android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                            )
+                        }
+                    }
+                )
+            }
+        }
+
         SectionCard("Backup & export") {
             SettingRow(
                 Icons.Filled.CloudUpload,
@@ -249,8 +308,10 @@ fun SettingsScreen(vm: AppViewModel, nav: NavController) {
     if (showExportDialog) {
         PassphraseDialog(
             title = "Encrypt backup",
-            subtitle = "Choose a passphrase. You will need it to restore — it is not stored anywhere.",
+            subtitle = "Choose a passphrase. You will need it to restore — it is not stored anywhere. " +
+                "A longer passphrase keeps the backup safe wherever you store it.",
             confirmLabel = "Choose location",
+            minLength = 8,
             onConfirm = { pass ->
                 pendingPassphrase = pass
                 showExportDialog = false
@@ -350,6 +411,7 @@ private fun PassphraseDialog(
     title: String,
     subtitle: String,
     confirmLabel: String,
+    minLength: Int = 1,
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -364,12 +426,16 @@ private fun PassphraseDialog(
                     value = pass,
                     onValueChange = { pass = it },
                     label = { Text("Passphrase") },
+                    supportingText = if (minLength > 1) {
+                        { Text(if (pass.length < minLength) "At least $minLength characters" else "✓") }
+                    } else null,
+                    isError = minLength > 1 && pass.isNotEmpty() && pass.length < minLength,
                     singleLine = true
                 )
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(pass) }, enabled = pass.length >= 6) { Text(confirmLabel) }
+            TextButton(onClick = { onConfirm(pass) }, enabled = pass.length >= minLength) { Text(confirmLabel) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )

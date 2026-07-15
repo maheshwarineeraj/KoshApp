@@ -1,6 +1,7 @@
 package com.neeraj.fin
 
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.biometric.BiometricManager
@@ -71,13 +72,29 @@ import com.neeraj.fin.ui.screens.SettingsScreen
 import com.neeraj.fin.ui.screens.TransactionsScreen
 import com.neeraj.fin.ui.screens.WealthScreen
 import com.neeraj.fin.ui.theme.FinTheme
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 
 class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val app = application as FinApp
+        // Keep balances and transactions out of screenshots, screen recordings,
+        // and the Recents preview while the setting is on (default).
+        lifecycleScope.launch {
+            app.settings.blockScreenshots.collect { block ->
+                if (block) {
+                    window.setFlags(
+                        WindowManager.LayoutParams.FLAG_SECURE,
+                        WindowManager.LayoutParams.FLAG_SECURE
+                    )
+                } else {
+                    window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                }
+            }
+        }
         setContent {
             FinTheme {
                 // null = setting not loaded yet: render nothing for that first frame

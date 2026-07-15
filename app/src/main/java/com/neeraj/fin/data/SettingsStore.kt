@@ -17,12 +17,16 @@ class SettingsStore(private val context: Context) {
     private val autoCaptureKey = booleanPreferencesKey("sms_auto_capture")
     private val appLockKey = booleanPreferencesKey("app_lock")
     private val notificationsKey = booleanPreferencesKey("notifications_enabled")
+    private val blockScreenshotsKey = booleanPreferencesKey("block_screenshots")
+    private val notifCaptureKey = booleanPreferencesKey("notification_capture")
     private val markersKey = stringSetPreferencesKey("notification_markers")
 
     val currencyCode: Flow<String> = context.dataStore.data.map { it[currencyKey] ?: "INR" }
     val smsAutoCapture: Flow<Boolean> = context.dataStore.data.map { it[autoCaptureKey] ?: true }
     val appLock: Flow<Boolean> = context.dataStore.data.map { it[appLockKey] ?: false }
     val notificationsEnabled: Flow<Boolean> = context.dataStore.data.map { it[notificationsKey] ?: false }
+    val blockScreenshots: Flow<Boolean> = context.dataStore.data.map { it[blockScreenshotsKey] ?: true }
+    val notificationCapture: Flow<Boolean> = context.dataStore.data.map { it[notifCaptureKey] ?: false }
 
     suspend fun setCurrencyCode(code: String) {
         context.dataStore.edit { it[currencyKey] = code }
@@ -38,6 +42,14 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setNotificationsEnabled(enabled: Boolean) {
         context.dataStore.edit { it[notificationsKey] = enabled }
+    }
+
+    suspend fun setBlockScreenshots(enabled: Boolean) {
+        context.dataStore.edit { it[blockScreenshotsKey] = enabled }
+    }
+
+    suspend fun setNotificationCapture(enabled: Boolean) {
+        context.dataStore.edit { it[notifCaptureKey] = enabled }
     }
 
     // One-shot markers so alerts fire once per period (e.g. "budget:3:2026-07-01:80").
