@@ -47,7 +47,11 @@ import com.neeraj.fin.data.db.Txn
 import com.neeraj.fin.data.db.TxnType
 import com.neeraj.fin.ui.AppViewModel
 import com.neeraj.fin.ui.components.ConfirmDialog
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import com.neeraj.fin.util.Format
+import com.neeraj.fin.util.ReceiptScanner
+import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
 
@@ -75,6 +79,26 @@ fun EditTxnScreen(vm: AppViewModel, nav: NavController, txnId: Long) {
     var showDelete by remember { mutableStateOf(false) }
     var showSplit by remember { mutableStateOf(false) }
 
+    // Receipt OCR: pick a photo, extract amount + merchant on-device.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var scanning by remember { mutableStateOf(false) }
+    val receiptPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            scanning = true
+            scope.launch {
+                val result = runCatching { ReceiptScanner.scan(context, uri) }.getOrNull()
+                scanning = false
+                if (result?.amountMinor != null) {
+                    amountText = "%.2f".format(result.amountMinor / 100.0).removeSuffix(".00")
+                }
+                result?.merchant?.let { if (merchant.isBlank()) merchant = it }
+            }
+        }
+    }
+
     val amountMinor = Format.parseAmount(amountText)
     val matchingCats = categories.filter { it.kind == type }
 
@@ -88,6 +112,15 @@ fun EditTxnScreen(vm: AppViewModel, nav: NavController, txnId: Long) {
                     }
                 },
                 actions = {
+                    if (existing == null) {
+                        TextButton(onClick = {
+                            receiptPicker.launch(
+                                androidx.activity.result.PickVisualMediaRequest(
+                                    ActivityResultContracts.PickVisualMedia.ImageOnly
+                                )
+                            )
+                        }) { Text(if (scanning) "Scanning…" else "📷 Scan receipt") }
+                    }
                     if (existing != null && existing.type != TxnType.TRANSFER) {
                         TextButton(onClick = { showSplit = true }) { Text("Split") }
                     }

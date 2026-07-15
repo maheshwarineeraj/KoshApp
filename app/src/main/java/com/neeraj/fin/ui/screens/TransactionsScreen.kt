@@ -42,7 +42,9 @@ import com.neeraj.fin.data.db.TxnType
 import com.neeraj.fin.ui.AppViewModel
 import com.neeraj.fin.ui.components.EmptyState
 import com.neeraj.fin.ui.components.TxnRow
+import com.neeraj.fin.data.db.Txn
 import com.neeraj.fin.util.Format
+import com.neeraj.fin.util.QueryParser
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,13 +59,12 @@ fun TransactionsScreen(vm: AppViewModel, nav: NavController) {
     var typeFilter by remember { mutableStateOf<String?>(null) }
     var categoryFilter by remember { mutableStateOf<Long?>(null) }
 
+    // Natural-language search: "advance tax 20K in Q2 last year", "swiggy last month".
+    val parsed = remember(query) { if (query.isBlank()) null else QueryParser.parse(query) }
     val filtered = txns.filter { t ->
         (typeFilter == null || t.type == typeFilter) &&
             (categoryFilter == null || t.categoryId == categoryFilter) &&
-            (query.isBlank() ||
-                t.merchant.contains(query, ignoreCase = true) ||
-                t.note.contains(query, ignoreCase = true) ||
-                (catById[t.categoryId]?.name?.contains(query, ignoreCase = true) == true))
+            (parsed == null || matches(t, parsed, catById[t.categoryId]?.name))
     }
     val grouped = filtered.groupBy { Format.toLocalDate(it.timestamp) }
 
@@ -102,10 +103,18 @@ fun TransactionsScreen(vm: AppViewModel, nav: NavController) {
                 value = query,
                 onValueChange = { query = it },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                placeholder = { Text("Search merchant, note, category") },
+                placeholder = { Text("Try: advance tax 20K in Q2 last year") },
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                 singleLine = true
             )
+            if (parsed != null && parsed.isStructured) {
+                Text(
+                    "Searching: " + parsed.understood.joinToString(" · "),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp)
+                )
+            }
 
             Row(
                 Modifier
@@ -181,4 +190,24 @@ fun TransactionsScreen(vm: AppViewModel, nav: NavController) {
             }
         }
     }
+}
+
+/** Apply a parsed natural-language query to one transaction. */
+private fun matches(t: Txn, q: QueryParser.Parsed, categoryName: String?): Boolean {
+    if (q.type != null && t.type != q.type) return false
+    if (q.fromMillis != null && t.timestamp < q.fromMillis) return false
+    if (q.toMillis != null && t.timestamp >= q.toMillis) return false
+    if (q.amountMinor != null) {
+        val ok = when {
+            q.amountIsMin -> t.amountMinor >= q.amountMinor
+            q.amountIsMax -> t.amountMinor <= q.amountMinor
+            else -> t.amountMinor == q.amountMinor
+        }
+        if (!ok) return false
+    }
+    if (q.terms.isNotEmpty()) {
+        val hay = "${t.merchant} ${t.note} ${categoryName.orEmpty()}".lowercase()
+        if (!q.terms.all { hay.contains(it) }) return false
+    }
+    return true
 }

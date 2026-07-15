@@ -55,6 +55,9 @@ interface TxnDao {
     @Query("SELECT EXISTS(SELECT 1 FROM transactions WHERE source = 'SMS' AND amountMinor = :amountMinor AND type = :type AND timestamp BETWEEN :from AND :to)")
     suspend fun existsSimilarSms(amountMinor: Long, type: String, from: Long, to: Long): Boolean
 
+    @Query("SELECT categoryId FROM transactions WHERE categoryId IS NOT NULL AND LOWER(merchant) = LOWER(:merchant) ORDER BY timestamp DESC LIMIT 1")
+    suspend fun lastCategoryForMerchant(merchant: String): Long?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(txn: Txn): Long
 

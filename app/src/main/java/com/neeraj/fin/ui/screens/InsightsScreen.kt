@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -139,6 +140,26 @@ private fun OverviewTab(vm: AppViewModel) {
                 )
             }
         } else {
+            item {
+                // Plain-language digest, generated on-device from the period's numbers.
+                val prevRange = remember(kind, anchor) { Periods.rangeFor(kind, Periods.shift(kind, anchor, -1)) }
+                val prevTxns by remember(prevRange) { vm.txnsBetween(prevRange.startMillis, prevRange.endMillis) }
+                    .collectAsState(initial = emptyList())
+                val digest = buildDigest(txns, prevTxns, catById, currency)
+                if (digest.isNotEmpty()) {
+                    Card(
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                    ) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("In short", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            digest.forEach { line ->
+                                Text(line, style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
+                }
+            }
             item {
                 Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -518,4 +539,57 @@ private fun DeltaRow(label: String, cur: Long, prev: Long, currency: String, hig
             }
         }
     }
+}
+
+/**
+ * Rule-based plain-language summary of a period vs the previous one.
+ * Deterministic and fully on-device — no models, no guesswork in the numbers.
+ */
+private fun buildDigest(
+    cur: List<Txn>,
+    prev: List<Txn>,
+    catById: Map<Long, Category>,
+    currency: String
+): List<String> {
+    val lines = mutableListOf<String>()
+    val exp = cur.filter { it.type == TxnType.EXPENSE }
+    val inc = cur.filter { it.type == TxnType.INCOME }.sumOf { it.amountMinor }
+    val expTotal = exp.sumOf { it.amountMinor }
+    val prevExp = prev.filter { it.type == TxnType.EXPENSE }.sumOf { it.amountMinor }
+
+    if (expTotal > 0) {
+        var line = "You spent ${Format.money(expTotal, currency, withDecimals = false)}"
+        if (prevExp > 0) {
+            val pct = (expTotal - prevExp) * 100 / prevExp
+            line += when {
+                pct > 0 -> " — $pct% more than the previous period."
+                pct < 0 -> " — ${-pct}% less than the previous period."
+                else -> " — same as the previous period."
+            }
+        } else line += "."
+        lines += line
+    }
+
+    exp.filter { it.categoryId != null }
+        .groupBy { it.categoryId }
+        .maxByOrNull { (_, v) -> v.sumOf { it.amountMinor } }
+        ?.let { (catId, v) ->
+            val cat = catById[catId] ?: return@let
+            val total = v.sumOf { it.amountMinor }
+            val share = if (expTotal > 0) total * 100 / expTotal else 0
+            lines += "Biggest category: ${cat.emoji} ${cat.name} " +
+                "(${Format.money(total, currency, withDecimals = false)}, $share% of spending)."
+        }
+
+    exp.maxByOrNull { it.amountMinor }?.takeIf { it.amountMinor > 0 }?.let {
+        lines += "Largest expense: ${Format.money(it.amountMinor, currency, withDecimals = false)}" +
+            (it.merchant.takeIf { m -> m.isNotBlank() }?.let { m -> " at $m." } ?: ".")
+    }
+
+    if (inc > 0) {
+        val saved = (inc - expTotal) * 100 / inc
+        lines += if (saved >= 0) "You saved $saved% of your income."
+        else "You spent more than you earned this period."
+    }
+    return lines
 }

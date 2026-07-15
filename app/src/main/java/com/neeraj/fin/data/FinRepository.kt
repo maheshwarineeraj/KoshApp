@@ -158,6 +158,13 @@ class FinRepository(private val db: AppDatabase) {
 
     private suspend fun suggestCategory(parsed: ParsedSms): Category? {
         val all = db.categoryDao().allOnce()
+        // The user's own history beats keyword guessing: reuse whatever category
+        // they last gave this merchant.
+        if (parsed.merchant.isNotBlank() && !parsed.merchant.equals("unknown", ignoreCase = true)) {
+            db.txnDao().lastCategoryForMerchant(parsed.merchant)?.let { learned ->
+                all.firstOrNull { it.id == learned && it.kind == parsed.type }?.let { return it }
+            }
+        }
         val name = SmsParser.suggestCategoryName(parsed) ?: return null
         return all.firstOrNull { it.name.equals(name, ignoreCase = true) && it.kind == parsed.type }
             ?: all.firstOrNull { it.name.equals(name, ignoreCase = true) }

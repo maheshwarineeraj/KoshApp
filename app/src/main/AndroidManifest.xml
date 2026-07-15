@@ -1,9 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- ML Kit's manifest asks for INTERNET; Kosh's promise is that it cannot
+         touch the network, so strip it. OCR model downloads happen inside the
+         Play services process, which does not need our app to hold INTERNET. -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
 
     <application
         android:name=".FinApp"

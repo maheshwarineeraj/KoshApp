@@ -93,5 +93,8 @@ dependencies {
     implementation(libs.androidx.fragment.ktx)
     implementation(libs.androidx.work.runtime)
     implementation(libs.androidx.glance.appwidget)
+    // On-device OCR for receipt scanning; the recognizer model lives in Google
+    // Play services (unbundled), so the app itself stays small and offline.
+    implementation(libs.mlkit.text.recognition)
     implementation(libs.kotlinx.serialization.json)
 }
