@@ -97,4 +97,5 @@ dependencies {
     // Play services (unbundled), so the app itself stays small and offline.
     implementation(libs.mlkit.text.recognition)
     implementation(libs.kotlinx.serialization.json)
+    testImplementation("junit:junit:4.13.2")
 }
