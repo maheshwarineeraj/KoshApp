@@ -38,3 +38,7 @@ google-services.json
 
 # Kotlin toolchain cache
 .kotlin/
+
+# Release signing (never commit)
+keystore.properties
+*.finbak
