@@ -15,6 +15,7 @@ import com.neeraj.fin.data.db.Txn
 import com.neeraj.fin.data.db.TxnSource
 import com.neeraj.fin.data.db.TxnType
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -69,7 +70,7 @@ data class BackupRecurringRule(
 
 @Serializable
 data class BackupData(
-    val version: Int = 4,
+    val version: Int = 5,
     val exportedAtMillis: Long,
     val categories: List<BackupCategory>,
     val transactions: List<BackupTxn>,
@@ -80,7 +81,10 @@ data class BackupData(
     val goals: List<BackupGoal> = emptyList(),
     val goalContributions: List<BackupGoalContribution> = emptyList(),
     val eventBudgets: List<BackupEventBudget> = emptyList(),
-    val recurringRules: List<BackupRecurringRule> = emptyList()
+    val recurringRules: List<BackupRecurringRule> = emptyList(),
+    // v5: preferences, so a restore on a new device keeps the same experience
+    val currencyCode: String? = null,
+    val smsAutoCapture: Boolean? = null
 )
 
 /**
@@ -89,7 +93,11 @@ data class BackupData(
  * any cloud SDK). Format: "FINBAK1" magic + 16B salt + 12B IV + AES-256-GCM ciphertext.
  * Key derived from the user's passphrase with PBKDF2-HMAC-SHA256 (200k iterations).
  */
-class BackupManager(private val context: Context, private val repository: FinRepository) {
+class BackupManager(
+    private val context: Context,
+    private val repository: FinRepository,
+    private val settings: com.neeraj.fin.data.SettingsStore
+) {
 
     private val json = Json { ignoreUnknownKeys = true }
     private val magic = "FINBAK1".toByteArray(Charsets.US_ASCII)
@@ -110,7 +118,9 @@ class BackupManager(private val context: Context, private val repository: FinRep
             eventBudgets = snap.eventBudgets.map { BackupEventBudget(it.id, it.name, it.emoji, it.plannedMinor, it.createdAt) },
             recurringRules = snap.recurringRules.map {
                 BackupRecurringRule(it.id, it.amountMinor, it.type, it.categoryId, it.merchant, it.note, it.dayOfMonth, it.startMillis, it.lastAppliedKey)
-            }
+            },
+            currencyCode = settings.currencyCode.first(),
+            smsAutoCapture = settings.smsAutoCapture.first()
         )
         val plaintext = json.encodeToString(BackupData.serializer(), data).toByteArray(Charsets.UTF_8)
 
@@ -161,6 +171,8 @@ class BackupManager(private val context: Context, private val repository: FinRep
                 }
             )
         )
+        data.currencyCode?.let { settings.setCurrencyCode(it) }
+        data.smsAutoCapture?.let { settings.setSmsAutoCapture(it) }
         data.transactions.size
     }
 

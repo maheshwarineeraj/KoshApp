@@ -160,6 +160,60 @@ fun WealthScreen(vm: AppViewModel) {
                     }
                 }
 
+                // MoM / QoQ / YoY comparison against carried-forward historical values
+                item {
+                    val now = System.currentTimeMillis()
+                    val earliestSnapshot = values.minOfOrNull { it.timestamp } ?: now
+                    val zone = java.time.ZoneId.systemDefault()
+                    fun agoMillis(months: Long) =
+                        java.time.LocalDate.now().minusMonths(months).atStartOfDay(zone).toInstant().toEpochMilli()
+                    val rows = listOf(
+                        Triple("MoM", "vs 1 month ago", agoMillis(1)),
+                        Triple("QoQ", "vs 3 months ago", agoMillis(3)),
+                        Triple("YoY", "vs 1 year ago", agoMillis(12))
+                    ).filter { it.third >= earliestSnapshot }
+                    if (rows.isNotEmpty()) {
+                        Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Text("Growth", style = MaterialTheme.typography.titleMedium)
+                                rows.forEach { (tag, label, at) ->
+                                    val then = netWorthAt(assets, values, at)
+                                    val delta = netWorth - then
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text(tag, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                            Text(
+                                                "$label · ${Format.compact(then, currency)}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        Column(horizontalAlignment = Alignment.End) {
+                                            Text(
+                                                (if (delta >= 0) "▲ " else "▼ ") + Format.compact(kotlin.math.abs(delta), currency),
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = if (delta >= 0) incomeColor() else expenseColor()
+                                            )
+                                            if (then != 0L) {
+                                                Text(
+                                                    "${if (delta >= 0) "+" else ""}${delta * 100 / kotlin.math.abs(then)}%",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                                Text(
+                                    "Based on the values you've recorded — update holdings regularly for accurate trends.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+
                 if (holdings.isNotEmpty()) {
                     item {
                         Text(
@@ -257,6 +311,16 @@ private fun AssetRow(asset: Asset, valueMinor: Long, currency: String, onClick: 
             }
         }
     }
+}
+
+/** Net worth at a point in time: latest recorded value per asset at or before [atMillis]. */
+private fun netWorthAt(assets: List<Asset>, values: List<AssetValue>, atMillis: Long): Long {
+    val sign = assets.associate { it.id to if (it.isLiability) -1L else 1L }
+    return values.filter { it.timestamp <= atMillis }
+        .groupBy { it.assetId }
+        .entries.sumOf { (assetId, vs) ->
+            (vs.maxByOrNull { it.timestamp }?.valueMinor ?: 0L) * (sign[assetId] ?: 1L)
+        }
 }
 
 /** Month-end net worth for the last 6 months, carrying forward each asset's latest value. */

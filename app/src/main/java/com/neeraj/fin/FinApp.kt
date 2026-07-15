@@ -27,7 +27,7 @@ class FinApp : Application() {
     val database: AppDatabase by lazy { AppDatabase.get(this) }
     val repository: FinRepository by lazy { FinRepository(database) }
     val settings: SettingsStore by lazy { SettingsStore(this) }
-    val backupManager: BackupManager by lazy { BackupManager(this, repository) }
+    val backupManager: BackupManager by lazy { BackupManager(this, repository, settings) }
     val smsImporter: SmsImporter by lazy { SmsImporter(this, repository) }
 
     /** App-lock session state: true once the user has authenticated this session. */
