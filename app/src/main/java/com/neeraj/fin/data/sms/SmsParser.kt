@@ -155,6 +155,8 @@ object SmsParser {
         Regex("""(?:\bat|\bto)\s+([A-Za-z][A-Za-z0-9 &._'\-*]{1,40}?)(?:\s+on\b|\s+via\b|\s+ref\b|\s+using\b|\s+upi\b|[.,;\n]|$)""", RegexOption.IGNORE_CASE),
         Regex("""\bfrom\s+([A-Za-z][A-Za-z0-9 &._'\-*]{1,40}?)(?:\s+on\b|\s+via\b|\s+ref\b|\s+a/c\b|[.,;\n]|$)""", RegexOption.IGNORE_CASE),
         Regex("""\bvpa\s+([\w.\-]+@[\w]+)""", RegexOption.IGNORE_CASE),
+        // A bare UPI id after to/at ("for UPI to bookmyshow@axis")
+        Regex("""(?:\bto|\bat)\s+([\w.\-]+@[\w]+)""", RegexOption.IGNORE_CASE),
         Regex("""\binfo:?\s*([A-Za-z0-9 &._'\-*/]{2,40})""", RegexOption.IGNORE_CASE),
         // Card-spend format: "spent using ... Card XX1234 on 29-Jun-26 on MERCHANT."
         // A leading letter is required, so dates after "on" never match.
@@ -167,7 +169,8 @@ object SmsParser {
 
     private fun extractMerchant(text: String, type: String): String? {
         val ordered = if (type == TxnType.INCOME) {
-            listOf(merchantPatterns[1], merchantPatterns[0], merchantPatterns[2], merchantPatterns[3], merchantPatterns[4])
+            // Prefer "from X" for credits, then the remaining patterns in order.
+            listOf(merchantPatterns[1], merchantPatterns[0]) + merchantPatterns.drop(2)
         } else merchantPatterns
         for (pattern in ordered) {
             val m = pattern.find(text) ?: continue
