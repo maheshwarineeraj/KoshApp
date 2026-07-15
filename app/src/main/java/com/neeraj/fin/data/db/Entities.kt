@@ -89,6 +89,8 @@ object AssetType {
     const val CASH = "CASH"
     const val OTHER = "OTHER"
     const val LOAN = "LOAN"
+    const val CREDIT_CARD = "CREDIT_CARD"
+    const val OTHER_LIABILITY = "OTHER_LIABILITY"
 
     data class Meta(val emoji: String, val label: String, val isLiability: Boolean = false)
 
@@ -103,7 +105,9 @@ object AssetType {
         PROPERTY to Meta("🏠", "Property"),
         CASH to Meta("💵", "Cash"),
         OTHER to Meta("📦", "Other"),
-        LOAN to Meta("💳", "Loan / EMI", isLiability = true)
+        LOAN to Meta("🏦", "Loan / EMI", isLiability = true),
+        CREDIT_CARD to Meta("💳", "Credit card due", isLiability = true),
+        OTHER_LIABILITY to Meta("📋", "Other dues", isLiability = true)
     )
 
     fun meta(type: String): Meta = all.firstOrNull { it.first == type }?.second ?: Meta("📦", "Other")

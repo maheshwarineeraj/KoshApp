@@ -142,6 +142,9 @@ fun EditTxnScreen(vm: AppViewModel, nav: NavController, txnId: Long) {
                 prefix = { Text(Format.money(0, currency).first().toString()) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 isError = amountText.isNotBlank() && amountMinor == null,
+                supportingText = if (Format.isExpression(amountText) && amountMinor != null) {
+                    { Text("= ${Format.money(amountMinor, currency)}") }
+                } else null,
                 singleLine = true
             )
 

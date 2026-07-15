@@ -134,6 +134,17 @@ private fun PendingCard(item: PendingSms, vm: AppViewModel, currency: String) {
                 )
             }
 
+            if (item.type == TxnType.TRANSFER) {
+                Text(
+                    "⚠️ Credit card bill payment. Your card spends are already tracked one by one, " +
+                        "so counting the bill too would double your expenses. Approve as Transfer to " +
+                        "record it without affecting any numbers, Reject to skip it, or Edit and switch " +
+                        "to Expense only if you don't track individual card transactions.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+
             if (!expanded) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                     Text(
@@ -183,6 +194,9 @@ private fun PendingCard(item: PendingSms, vm: AppViewModel, currency: String) {
                     label = { Text("Amount") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     isError = amountMinor == null,
+                    supportingText = if (Format.isExpression(amountText) && amountMinor != null) {
+                        { Text("= ${Format.money(amountMinor, currency)}") }
+                    } else null,
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )

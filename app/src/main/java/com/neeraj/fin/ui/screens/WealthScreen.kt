@@ -11,20 +11,25 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -61,7 +66,8 @@ fun WealthScreen(vm: AppViewModel) {
     val currency by vm.currencyCode.collectAsState()
 
     var editing by remember { mutableStateOf<Asset?>(null) }
-    var creating by remember { mutableStateOf(false) }
+    // null = not creating; false = new asset; true = new liability
+    var creating by remember { mutableStateOf<Boolean?>(null) }
 
     // Latest value per asset
     val latest: Map<Long, Long> = remember(values) {
@@ -73,15 +79,7 @@ fun WealthScreen(vm: AppViewModel) {
     val totalLiabilities = liabilities.sumOf { latest[it.id] ?: 0L }
     val netWorth = totalAssets - totalLiabilities
 
-    Scaffold(
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { creating = true },
-                icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                text = { Text("Add holding") }
-            )
-        }
-    ) { padding ->
+    Scaffold { padding ->
         LazyColumn(
             Modifier.fillMaxSize().padding(padding),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -130,6 +128,24 @@ fun WealthScreen(vm: AppViewModel) {
                                 )
                             }
                         }
+                    }
+                }
+            }
+
+            item {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    FilledTonalButton(onClick = { creating = false }, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Filled.Add, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Asset")
+                    }
+                    FilledTonalButton(onClick = { creating = true }, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Filled.Remove, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Liability")
                     }
                 }
             }
@@ -254,12 +270,13 @@ fun WealthScreen(vm: AppViewModel) {
         }
     }
 
-    if (creating) {
+    creating?.let { asLiability ->
         AssetDialog(
             initial = null, initialValue = null, currency = currency,
-            onSave = { asset, value -> vm.addAsset(asset, value); creating = false },
+            startLiability = asLiability,
+            onSave = { asset, value -> vm.addAsset(asset, value); creating = null },
             onDelete = null,
-            onDismiss = { creating = false }
+            onDismiss = { creating = null }
         )
     }
     editing?.let { asset ->
@@ -346,11 +363,15 @@ private fun AssetDialog(
     initial: Asset?,
     initialValue: Long?,
     currency: String,
+    startLiability: Boolean = false,
     onSave: (Asset, Long) -> Unit,
     onDelete: (() -> Unit)?,
     onDismiss: () -> Unit
 ) {
-    var type by remember { mutableStateOf(initial?.type ?: AssetType.MUTUAL_FUND) }
+    var liability by remember { mutableStateOf(initial?.isLiability ?: startLiability) }
+    var type by remember {
+        mutableStateOf(initial?.type ?: if (liability) AssetType.LOAN else AssetType.MUTUAL_FUND)
+    }
     var name by remember { mutableStateOf(initial?.name ?: "") }
     var platform by remember { mutableStateOf(initial?.platform ?: "") }
     var investedText by remember {
@@ -363,7 +384,7 @@ private fun AssetDialog(
 
     val valueMinor = Format.parseAmount(valueText)
     val investedMinor = if (investedText.isBlank()) 0L else Format.parseAmount(investedText)
-    val isLiability = AssetType.meta(type).isLiability
+    val isLiability = liability
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(shape = MaterialTheme.shapes.extraLarge, tonalElevation = 6.dp) {
@@ -372,13 +393,40 @@ private fun AssetDialog(
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 Text(
-                    if (initial == null) "Add holding" else "Edit holding",
+                    when {
+                        initial != null -> if (isLiability) "Edit liability" else "Edit asset"
+                        isLiability -> "Add liability"
+                        else -> "Add asset"
+                    },
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold
                 )
 
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    SegmentedButton(
+                        selected = !liability,
+                        onClick = {
+                            if (liability) {
+                                liability = false
+                                type = AssetType.all.first { !it.second.isLiability }.first
+                            }
+                        },
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                    ) { Text("Asset · you own") }
+                    SegmentedButton(
+                        selected = liability,
+                        onClick = {
+                            if (!liability) {
+                                liability = true
+                                type = AssetType.all.first { it.second.isLiability }.first
+                            }
+                        },
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                    ) { Text("Liability · you owe") }
+                }
+
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    AssetType.all.forEach { (t, meta) ->
+                    AssetType.all.filter { it.second.isLiability == liability }.forEach { (t, meta) ->
                         FilterChip(
                             selected = type == t,
                             onClick = { type = t },
@@ -402,6 +450,9 @@ private fun AssetDialog(
                     label = { Text(if (isLiability) "Outstanding amount" else "Current value") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     isError = valueText.isNotBlank() && valueMinor == null,
+                    supportingText = if (Format.isExpression(valueText) && valueMinor != null) {
+                        { Text("= ${Format.money(valueMinor, currency)}") }
+                    } else null,
                     singleLine = true, modifier = Modifier.fillMaxWidth()
                 )
                 if (!isLiability) {
@@ -409,6 +460,9 @@ private fun AssetDialog(
                         value = investedText, onValueChange = { investedText = it },
                         label = { Text("Amount invested (optional, for returns)") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        supportingText = if (Format.isExpression(investedText) && investedMinor != null) {
+                            { Text("= ${Format.money(investedMinor, currency)}") }
+                        } else null,
                         singleLine = true, modifier = Modifier.fillMaxWidth()
                     )
                 }
