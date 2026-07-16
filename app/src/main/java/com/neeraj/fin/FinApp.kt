@@ -51,10 +51,18 @@ class FinApp : Application() {
             PeriodicWorkRequestBuilder<DailyWorker>(24, TimeUnit.HOURS).build()
         )
 
-        // Re-lock whenever the whole app leaves the foreground.
+        // Re-lock only after the app has been in the background for a while.
+        // Quick round-trips (camera scan, photo picker, notification shade)
+        // should not force another unlock.
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
+            private var backgroundedAt = 0L
             override fun onStop(owner: LifecycleOwner) {
-                unlocked.value = false
+                backgroundedAt = System.currentTimeMillis()
+            }
+            override fun onStart(owner: LifecycleOwner) {
+                if (backgroundedAt > 0 && System.currentTimeMillis() - backgroundedAt > 60_000) {
+                    unlocked.value = false
+                }
             }
         })
     }

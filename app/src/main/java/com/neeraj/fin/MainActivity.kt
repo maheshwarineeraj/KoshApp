@@ -115,9 +115,16 @@ class MainActivity : FragmentActivity() {
                         onAgree = { lifecycleScope.launch { app.settings.setPrivacyAccepted(true) } },
                         onExit = { finish() }
                     )
-                    lockEnabled == true && !unlocked ->
-                        LockScreen(onRequestUnlock = { promptUnlock(app) })
-                    else -> FinNav()
+                    else -> Box {
+                        FinNav()
+                        // Overlay (not replacement) so the navigation stack and any
+                        // half-filled form survive the lock/unlock round-trip.
+                        if (lockEnabled == true && !unlocked) {
+                            androidx.compose.material3.Surface(Modifier.fillMaxSize()) {
+                                LockScreen(onRequestUnlock = { promptUnlock(app) })
+                            }
+                        }
+                    }
                 }
             }
         }

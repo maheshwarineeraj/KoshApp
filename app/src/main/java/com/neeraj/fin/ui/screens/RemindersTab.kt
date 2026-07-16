@@ -74,7 +74,7 @@ fun RemindersTab(vm: AppViewModel) {
             Button(
                 onClick = { creating = true },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 12.dp)
-            ) { Text("+ Add reminder") }
+            ) { Text("+ Add Reminder") }
         }
 
         if (suggested.isNotEmpty() || patterns.isNotEmpty()) {
@@ -137,7 +137,7 @@ fun RemindersTab(vm: AppViewModel) {
                                     )
                                 },
                                 modifier = Modifier.weight(1f)
-                            ) { Text("Add reminder") }
+                            ) { Text("Add Reminder") }
                             OutlinedButton(
                                 onClick = { vm.dismissPattern(p.title) },
                                 modifier = Modifier.weight(1f)

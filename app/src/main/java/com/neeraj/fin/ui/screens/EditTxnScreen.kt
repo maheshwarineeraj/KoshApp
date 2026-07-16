@@ -253,49 +253,6 @@ fun EditTxnScreen(vm: AppViewModel, nav: NavController, txnId: Long) {
                 singleLine = true
             )
 
-            if (type == TxnType.EXPENSE && eventBudgets.isNotEmpty()) {
-                // Trip mode: while the date falls inside an event's window,
-                // pre-tag the expense to it until the user chooses otherwise.
-                androidx.compose.runtime.LaunchedEffect(timestamp, type, eventBudgets) {
-                    if (!eventTouched && eventBudgetId == null) {
-                        eventBudgets.firstOrNull { b ->
-                            b.startMillis != null && b.endMillis != null &&
-                                timestamp >= b.startMillis && timestamp < b.endMillis + 86_400_000L
-                        }?.let { eventBudgetId = it.id }
-                    }
-                }
-                Column {
-                    Text("Part of a budget? (optional)", style = MaterialTheme.typography.labelLarge)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        eventBudgets.forEach { b ->
-                            FilterChip(
-                                selected = eventBudgetId == b.id,
-                                onClick = {
-                                    eventTouched = true
-                                    eventBudgetId = if (eventBudgetId == b.id) null else b.id
-                                },
-                                label = { Text("${b.emoji} ${b.name}") }
-                            )
-                        }
-                    }
-                }
-            }
-
-            if (type == TxnType.INCOME && goals.isNotEmpty()) {
-                Column {
-                    Text("Put towards a goal? (optional)", style = MaterialTheme.typography.labelLarge)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        goals.forEach { g ->
-                            FilterChip(
-                                selected = goalId == g.id,
-                                onClick = { goalId = if (goalId == g.id) null else g.id },
-                                label = { Text("${g.emoji} ${g.name}") }
-                            )
-                        }
-                    }
-                }
-            }
-
             OutlinedTextField(
                 value = merchant,
                 onValueChange = { merchant = it },
@@ -386,6 +343,115 @@ fun EditTxnScreen(vm: AppViewModel, nav: NavController, txnId: Long) {
                             },
                             dismissButton = {
                                 TextButton(onClick = { showCatPicker = false }) { Text("Close") }
+                            }
+                        )
+                    }
+                }
+            }
+
+
+            if (type == TxnType.EXPENSE && eventBudgets.isNotEmpty()) {
+                // Trip mode: while the date falls inside an event's window,
+                // pre-tag the expense to it until the user chooses otherwise.
+                androidx.compose.runtime.LaunchedEffect(timestamp, type, eventBudgets) {
+                    if (!eventTouched && eventBudgetId == null) {
+                        eventBudgets.firstOrNull { b ->
+                            b.startMillis != null && b.endMillis != null &&
+                                timestamp >= b.startMillis && timestamp < b.endMillis + 86_400_000L
+                        }?.let { eventBudgetId = it.id }
+                    }
+                }
+                Column {
+                    Text("Part of a budget? (optional)", style = MaterialTheme.typography.labelLarge)
+                    var showEventPicker by remember { mutableStateOf(false) }
+                    val active = eventBudgets.filter { b ->
+                        b.startMillis != null && b.endMillis != null &&
+                            timestamp >= b.startMillis && timestamp < b.endMillis + 86_400_000L
+                    }
+                    val eventChips = (listOfNotNull(eventBudgets.firstOrNull { it.id == eventBudgetId }) +
+                        active + eventBudgets.sortedByDescending { it.createdAt })
+                        .distinctBy { it.id }.take(3)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        eventChips.forEach { b ->
+                            FilterChip(
+                                selected = eventBudgetId == b.id,
+                                onClick = {
+                                    eventTouched = true
+                                    eventBudgetId = if (eventBudgetId == b.id) null else b.id
+                                },
+                                label = { Text("${b.emoji} ${b.name}") }
+                            )
+                        }
+                        if (eventBudgets.size > eventChips.size) {
+                            FilterChip(selected = false, onClick = { showEventPicker = true }, label = { Text("All ▾") })
+                        }
+                    }
+                    if (showEventPicker) {
+                        androidx.compose.material3.AlertDialog(
+                            onDismissRequest = { showEventPicker = false },
+                            title = { Text("Event budget") },
+                            text = {
+                                Column(Modifier.verticalScroll(rememberScrollState())) {
+                                    eventBudgets.forEach { b ->
+                                        Text(
+                                            "${b.emoji} ${b.name}",
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            modifier = Modifier.fillMaxWidth()
+                                                .clickable {
+                                                    eventTouched = true
+                                                    eventBudgetId = b.id; showEventPicker = false
+                                                }
+                                                .padding(vertical = 10.dp)
+                                        )
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = { showEventPicker = false }) { Text("Close") }
+                            }
+                        )
+                    }
+                }
+            }
+
+            if (type == TxnType.INCOME && goals.isNotEmpty()) {
+                Column {
+                    Text("Put towards a goal? (optional)", style = MaterialTheme.typography.labelLarge)
+                    var showGoalPicker by remember { mutableStateOf(false) }
+                    val goalChips = (listOfNotNull(goals.firstOrNull { it.id == goalId }) +
+                        goals.sortedBy { it.deadlineMillis ?: Long.MAX_VALUE })
+                        .distinctBy { it.id }.take(3)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        goalChips.forEach { g ->
+                            FilterChip(
+                                selected = goalId == g.id,
+                                onClick = { goalId = if (goalId == g.id) null else g.id },
+                                label = { Text("${g.emoji} ${g.name}") }
+                            )
+                        }
+                        if (goals.size > goalChips.size) {
+                            FilterChip(selected = false, onClick = { showGoalPicker = true }, label = { Text("All ▾") })
+                        }
+                    }
+                    if (showGoalPicker) {
+                        androidx.compose.material3.AlertDialog(
+                            onDismissRequest = { showGoalPicker = false },
+                            title = { Text("Goal") },
+                            text = {
+                                Column(Modifier.verticalScroll(rememberScrollState())) {
+                                    goals.forEach { g ->
+                                        Text(
+                                            "${g.emoji} ${g.name}",
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            modifier = Modifier.fillMaxWidth()
+                                                .clickable { goalId = g.id; showGoalPicker = false }
+                                                .padding(vertical = 10.dp)
+                                        )
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = { showGoalPicker = false }) { Text("Close") }
                             }
                         )
                     }
