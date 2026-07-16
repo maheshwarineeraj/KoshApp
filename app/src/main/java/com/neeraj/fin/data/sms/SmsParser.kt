@@ -32,7 +32,8 @@ object SmsParser {
     )
 
     private val debitKeywords = listOf(
-        "debited", "spent", "paid", "sent", "withdrawn", "deducted", "purchase", "charged", "payment of"
+        "debited", "spent", "paid", "sent", "withdrawn", "deducted", "purchase", "charged", "payment of",
+        "used at", "used for", "used on"
     )
     private val creditKeywords = listOf(
         "credited", "received", "deposited", "refunded", "refund of", "cashback of", "salary of"
@@ -176,7 +177,7 @@ object SmsParser {
     }
 
     private val merchantPatterns = listOf(
-        Regex("""(?:\bat|\bto)\s+([A-Za-z][A-Za-z0-9 &._'\-*]{1,40}?)(?:\s+on\b|\s+via\b|\s+ref\b|\s+using\b|\s+upi\b|[.,;\n]|$)""", RegexOption.IGNORE_CASE),
+        Regex("""(?:\bat|\bto)\s+([A-Za-z][A-Za-z0-9 &._'\-*]{1,40}?)(?:\s+on\b|\s+via\b|\s+ref\b|\s+using\b|\s+upi\b|\s+for\b|[.,;\n]|$)""", RegexOption.IGNORE_CASE),
         Regex("""\bfrom\s+([A-Za-z][A-Za-z0-9 &._'\-*]{1,40}?)(?:\s+on\b|\s+via\b|\s+ref\b|\s+a/c\b|[.,;\n]|$)""", RegexOption.IGNORE_CASE),
         Regex("""\bvpa\s+([\w.\-]+@[\w]+)""", RegexOption.IGNORE_CASE),
         // A bare UPI id after to/at ("for UPI to bookmyshow@axis")

@@ -1,5 +1,8 @@
 package com.neeraj.fin.ui.screens
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -241,9 +244,15 @@ private fun PendingCard(
                             vm.approvePending(item, item.amountMinor, type, categoryId, merchant.trim(), noteText.trim())
                         },
                         modifier = Modifier.weight(1f)
-                    ) { Text("Approve") }
-                    OutlinedButton(onClick = { expanded = true }, modifier = Modifier.weight(1f)) { Text("Edit") }
-                    OutlinedButton(onClick = { vm.rejectPending(item) }, modifier = Modifier.weight(1f)) { Text("Reject") }
+                    ) { Text("Approve", maxLines = 1, softWrap = false) }
+                    OutlinedButton(
+                        onClick = { expanded = true }, modifier = Modifier.weight(1f),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 8.dp)
+                    ) { Text("Edit", maxLines = 1) }
+                    OutlinedButton(
+                        onClick = { vm.rejectPending(item) }, modifier = Modifier.weight(1f),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 8.dp)
+                    ) { Text("Reject", maxLines = 1) }
                 }
             } else {
                 SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
@@ -289,14 +298,47 @@ private fun PendingCard(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+                val txnsAll by vm.transactions.collectAsState()
+                var showCatPicker by remember { mutableStateOf(false) }
+                val chips = remember(merchant, noteText, type, categoryId, categories, txnsAll) {
+                    val strong = strongCategorySuggestions(merchant, noteText, matchingCats, txnsAll)
+                    (listOfNotNull(categories.firstOrNull { it.id == categoryId }) + strong +
+                        suggestCategories(merchant, noteText, matchingCats, txnsAll))
+                        .distinctBy { it.id }.filter { it.kind == type }.take(3)
+                }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    matchingCats.forEach { c ->
+                    chips.forEach { c ->
                         FilterChip(
                             selected = categoryId == c.id,
                             onClick = { categoryId = if (categoryId == c.id) null else c.id },
                             label = { Text("${c.emoji} ${c.name}") }
                         )
                     }
+                    FilterChip(selected = false, onClick = { showCatPicker = true }, label = { Text("All ▾") })
+                }
+                if (showCatPicker) {
+                    androidx.compose.material3.AlertDialog(
+                        onDismissRequest = { showCatPicker = false },
+                        title = { Text("Category") },
+                        text = {
+                            Column(Modifier.verticalScroll(rememberScrollState())) {
+                                matchingCats.forEach { c ->
+                                    Text(
+                                        "${c.emoji} ${c.name}",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        modifier = Modifier.fillMaxWidth()
+                                            .clickable {
+                                                categoryId = c.id; showCatPicker = false
+                                            }
+                                            .padding(vertical = 10.dp)
+                                    )
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            androidx.compose.material3.TextButton(onClick = { showCatPicker = false }) { Text("Close") }
+                        }
+                    )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
@@ -304,8 +346,9 @@ private fun PendingCard(
                             vm.approvePending(item, amountMinor!!, type, categoryId, merchant.trim(), noteText.trim())
                         },
                         enabled = amountMinor != null,
-                        modifier = Modifier.weight(1f)
-                    ) { Text("Approve") }
+                        modifier = Modifier.weight(1f),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 8.dp)
+                    ) { Text("Approve", maxLines = 1, softWrap = false) }
                     OutlinedButton(onClick = { expanded = false }, modifier = Modifier.weight(1f)) { Text("Collapse") }
                 }
             }
