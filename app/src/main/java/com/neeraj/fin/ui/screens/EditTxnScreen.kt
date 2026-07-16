@@ -6,7 +6,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -70,6 +72,7 @@ fun EditTxnScreen(vm: AppViewModel, nav: NavController, txnId: Long) {
     }
     var type by remember(existing?.id) { mutableStateOf(existing?.type ?: TxnType.EXPENSE) }
     var categoryId by remember(existing?.id) { mutableStateOf(existing?.categoryId) }
+    var catTouched by remember(existing?.id) { mutableStateOf(existing != null) }
     var merchant by remember(existing?.id) { mutableStateOf(existing?.merchant ?: "") }
     var note by remember(existing?.id) { mutableStateOf(existing?.note ?: "") }
     var timestamp by remember(existing?.id) { mutableStateOf(existing?.timestamp ?: System.currentTimeMillis()) }
@@ -137,6 +140,8 @@ fun EditTxnScreen(vm: AppViewModel, nav: NavController, txnId: Long) {
             Modifier
                 .fillMaxSize()
                 .padding(padding)
+                // Keep the focused field visible above the keyboard.
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -204,22 +209,6 @@ fun EditTxnScreen(vm: AppViewModel, nav: NavController, txnId: Long) {
                 singleLine = true
             )
 
-            if (type != TxnType.TRANSFER) {
-                Column {
-                    Text("Category", style = MaterialTheme.typography.labelLarge)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        matchingCats.forEach { c ->
-                            FilterChip(
-                                selected = categoryId == c.id,
-                                onClick = { categoryId = if (categoryId == c.id) null else c.id },
-                                label = { Text("${c.emoji} ${c.name}") }
-                            )
-                        }
-                    }
-                    TextButton(onClick = { nav.navigate("categories") }) { Text("Manage categories") }
-                }
-            }
-
             if (type == TxnType.EXPENSE && eventBudgets.isNotEmpty()) {
                 Column {
                     Text("Part of a budget? (optional)", style = MaterialTheme.typography.labelLarge)
@@ -272,6 +261,79 @@ fun EditTxnScreen(vm: AppViewModel, nav: NavController, txnId: Long) {
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("Note (optional)") }
             )
+
+            if (type != TxnType.TRANSFER) {
+                // Top-3 category suggestions from your history and keywords;
+                // "All" opens the full picker. Custom categories scale cleanly.
+                Column {
+                    Text("Category", style = MaterialTheme.typography.labelLarge)
+                    val strong = remember(merchant, note, type, txns, categories) {
+                        strongCategorySuggestions(merchant, note, matchingCats, txns)
+                    }
+                    val suggested = remember(merchant, note, type, txns, categories) {
+                        (strong + suggestCategories(merchant, note, matchingCats, txns)).distinctBy { it.id }
+                    }
+                    // Auto-pick the best history/keyword match until the user
+                    // chooses a category themselves.
+                    androidx.compose.runtime.LaunchedEffect(strong, type) {
+                        if (!catTouched && strong.isNotEmpty()) categoryId = strong.first().id
+                    }
+                    var showCatPicker by remember { mutableStateOf(false) }
+                    val selectedCat = categories.firstOrNull { it.id == categoryId }
+                    val chips = (listOfNotNull(selectedCat) + suggested)
+                        .distinctBy { it.id }
+                        .filter { it.kind == type }
+                        .take(3)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        chips.forEach { c ->
+                            FilterChip(
+                                selected = categoryId == c.id,
+                                onClick = {
+                                    catTouched = true
+                                    categoryId = if (categoryId == c.id) null else c.id
+                                },
+                                label = { Text("${c.emoji} ${c.name}") }
+                            )
+                        }
+                        FilterChip(
+                            selected = false,
+                            onClick = { showCatPicker = true },
+                            label = { Text("All ▾") }
+                        )
+                    }
+                    if (showCatPicker) {
+                        androidx.compose.material3.AlertDialog(
+                            onDismissRequest = { showCatPicker = false },
+                            title = { Text("Category") },
+                            text = {
+                                Column(Modifier.verticalScroll(rememberScrollState())) {
+                                    matchingCats.forEach { c ->
+                                        Text(
+                                            "${c.emoji} ${c.name}",
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    catTouched = true
+                                                    categoryId = c.id; showCatPicker = false
+                                                }
+                                                .padding(vertical = 10.dp)
+                                        )
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = { showCatPicker = false; nav.navigate("categories") }) {
+                                    Text("Manage categories")
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showCatPicker = false }) { Text("Close") }
+                            }
+                        )
+                    }
+                }
+            }
 
             OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) {
                 Text(Format.dateTime(timestamp))
@@ -455,4 +517,70 @@ private fun habitSuggestion(txns: List<com.neeraj.fin.data.db.Txn>): HabitSugges
         .maxByOrNull { it.value.size }
         ?.value?.first()
         ?.let { HabitSuggestion(it.merchant, it.amountMinor, it.categoryId, it.type) }
+}
+
+/**
+ * Top category suggestions for manual entry, best first:
+ * 1) what you used before for this merchant, 2) keyword match on
+ * merchant+note text, 3) your overall most-used categories of this kind.
+ */
+private fun suggestCategories(
+    merchant: String,
+    note: String,
+    matchingCats: List<com.neeraj.fin.data.db.Category>,
+    txns: List<Txn>
+): List<com.neeraj.fin.data.db.Category> {
+    val result = mutableListOf<com.neeraj.fin.data.db.Category>()
+    val kind = matchingCats.firstOrNull()?.kind
+
+    if (merchant.length >= 3) {
+        txns.filter { it.categoryId != null && it.merchant.equals(merchant.trim(), ignoreCase = true) }
+            .groupBy { it.categoryId }
+            .entries.sortedByDescending { it.value.size }
+            .mapNotNull { (id, _) -> matchingCats.firstOrNull { it.id == id } }
+            .forEach { result += it }
+    }
+
+    val text = "$merchant $note".trim()
+    if (text.length >= 3 && kind != null) {
+        com.neeraj.fin.data.sms.SmsParser.suggestCategoryFromText(text, kind)?.let { name ->
+            matchingCats.firstOrNull { it.name.equals(name, ignoreCase = true) }?.let { result += it }
+        }
+    }
+
+    txns.filter { it.categoryId != null }
+        .groupBy { it.categoryId }
+        .entries.sortedByDescending { it.value.size }
+        .mapNotNull { (id, _) -> matchingCats.firstOrNull { it.id == id } }
+        .forEach { result += it }
+
+    // Pad with defaults so there are always three chips.
+    matchingCats.forEach { result += it }
+    return result.distinctBy { it.id }.take(3)
+}
+
+
+/** History + keyword suggestions only — the confident ones worth auto-selecting. */
+private fun strongCategorySuggestions(
+    merchant: String,
+    note: String,
+    matchingCats: List<com.neeraj.fin.data.db.Category>,
+    txns: List<Txn>
+): List<com.neeraj.fin.data.db.Category> {
+    val result = mutableListOf<com.neeraj.fin.data.db.Category>()
+    if (merchant.trim().length >= 3) {
+        txns.filter { it.categoryId != null && it.merchant.equals(merchant.trim(), ignoreCase = true) }
+            .groupBy { it.categoryId }
+            .entries.sortedByDescending { it.value.size }
+            .mapNotNull { (id, _) -> matchingCats.firstOrNull { it.id == id } }
+            .forEach { result += it }
+    }
+    val text = "$merchant $note".trim()
+    val kind = matchingCats.firstOrNull()?.kind
+    if (text.length >= 3 && kind != null) {
+        com.neeraj.fin.data.sms.SmsParser.suggestCategoryFromText(text, kind)?.let { name ->
+            matchingCats.firstOrNull { it.name.equals(name, ignoreCase = true) }?.let { result += it }
+        }
+    }
+    return result.distinctBy { it.id }
 }

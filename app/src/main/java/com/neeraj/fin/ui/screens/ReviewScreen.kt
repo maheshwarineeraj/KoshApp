@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
@@ -74,25 +75,73 @@ fun ReviewScreen(vm: AppViewModel, nav: NavController) {
             }
         } else {
             // High-confidence items: parser found a merchant we could categorize,
-            // or a transfer suggestion — safe to bulk-approve in one tap.
+            // or a transfer suggestion. "Select suggested" pre-ticks them so the
+            // user always sees exactly what a bulk action will touch.
             val confident = pending.filter {
                 it.foreignCurrency == null &&
                     (it.suggestedCategoryId != null || it.type == TxnType.TRANSFER)
             }
+            var selectedIds by remember { mutableStateOf(setOf<Long>()) }
+            val selected = pending.filter { it.id in selectedIds }
             LazyColumn(
-                Modifier.fillMaxSize().padding(padding),
+                Modifier.fillMaxSize().padding(padding)
+                    .imePadding(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (confident.size >= 2) {
+                if (pending.size >= 2) {
                     item {
-                        Button(
-                            onClick = { vm.approveAllSuggested(confident) },
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-                        ) { Text("Approve all suggested (${confident.size})") }
+                        Column(
+                            Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (confident.isNotEmpty()) {
+                                    OutlinedButton(
+                                        onClick = { selectedIds = confident.map { it.id }.toSet() },
+                                        modifier = Modifier.weight(1f)
+                                    ) { Text("Select suggested (${confident.size})") }
+                                }
+                                OutlinedButton(
+                                    onClick = {
+                                        selectedIds = if (selectedIds.size == pending.size) emptySet()
+                                        else pending.map { it.id }.toSet()
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) { Text(if (selectedIds.size == pending.size) "Clear all" else "Select all") }
+                            }
+                            if (selected.isNotEmpty()) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Button(
+                                        onClick = {
+                                            vm.approveAllSuggested(selected)
+                                            selectedIds = emptySet()
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    ) { Text("Approve ${selected.size}") }
+                                    OutlinedButton(
+                                        onClick = {
+                                            vm.rejectSelected(selected)
+                                            selectedIds = emptySet()
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Reject ${selected.size}", color = MaterialTheme.colorScheme.error)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 items(pending.size, key = { pending[it].id }) { i ->
-                    PendingCard(pending[i], vm, currency)
+                    val item = pending[i]
+                    PendingCard(
+                        item, vm, currency,
+                        selectable = pending.size >= 2,
+                        selected = item.id in selectedIds,
+                        onToggleSelect = { checked ->
+                            selectedIds = if (checked) selectedIds + item.id else selectedIds - item.id
+                        }
+                    )
                 }
                 item { Spacer(Modifier.height(24.dp)) }
             }
@@ -102,7 +151,14 @@ fun ReviewScreen(vm: AppViewModel, nav: NavController) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun PendingCard(item: PendingSms, vm: AppViewModel, currency: String) {
+private fun PendingCard(
+    item: PendingSms,
+    vm: AppViewModel,
+    currency: String,
+    selectable: Boolean = false,
+    selected: Boolean = false,
+    onToggleSelect: (Boolean) -> Unit = {}
+) {
     val categories by vm.categories.collectAsState()
 
     var amountText by remember(item.id) {
@@ -111,6 +167,7 @@ private fun PendingCard(item: PendingSms, vm: AppViewModel, currency: String) {
     var type by remember(item.id) { mutableStateOf(item.type) }
     var categoryId by remember(item.id) { mutableStateOf(item.suggestedCategoryId) }
     var merchant by remember(item.id) { mutableStateOf(item.merchant) }
+    var noteText by remember(item.id) { mutableStateOf(item.note) }
     var expanded by remember(item.id) { mutableStateOf(false) }
 
     val amountMinor = Format.parseAmount(amountText)
@@ -120,6 +177,9 @@ private fun PendingCard(item: PendingSms, vm: AppViewModel, currency: String) {
     Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                if (selectable) {
+                    androidx.compose.material3.Checkbox(checked = selected, onCheckedChange = onToggleSelect)
+                }
                 Column(Modifier.weight(1f)) {
                     Text(item.sender, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(Format.dateTime(item.timestamp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -169,7 +229,8 @@ private fun PendingCard(item: PendingSms, vm: AppViewModel, currency: String) {
                         } +
                             " · ${merchant.ifBlank { "Unknown" }}" +
                             (if (type == TxnType.TRANSFER) ""
-                            else selectedCat?.let { " · ${it.emoji} ${it.name}" } ?: " · Uncategorized"),
+                            else selectedCat?.let { " · ${it.emoji} ${it.name}" } ?: " · Uncategorized") +
+                            (noteText.takeIf { it.isNotBlank() }?.let { " · “$it”" } ?: ""),
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.weight(1f)
                     )
@@ -177,7 +238,7 @@ private fun PendingCard(item: PendingSms, vm: AppViewModel, currency: String) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = {
-                            vm.approvePending(item, item.amountMinor, type, categoryId, merchant.trim(), "")
+                            vm.approvePending(item, item.amountMinor, type, categoryId, merchant.trim(), noteText.trim())
                         },
                         modifier = Modifier.weight(1f)
                     ) { Text("Approve") }
@@ -221,6 +282,13 @@ private fun PendingCard(item: PendingSms, vm: AppViewModel, currency: String) {
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+                OutlinedTextField(
+                    value = noteText,
+                    onValueChange = { noteText = it },
+                    label = { Text("Note (optional)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     matchingCats.forEach { c ->
                         FilterChip(
@@ -233,7 +301,7 @@ private fun PendingCard(item: PendingSms, vm: AppViewModel, currency: String) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = {
-                            vm.approvePending(item, amountMinor!!, type, categoryId, merchant.trim(), "")
+                            vm.approvePending(item, amountMinor!!, type, categoryId, merchant.trim(), noteText.trim())
                         },
                         enabled = amountMinor != null,
                         modifier = Modifier.weight(1f)

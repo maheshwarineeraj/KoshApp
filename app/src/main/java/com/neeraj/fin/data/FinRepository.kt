@@ -151,7 +151,8 @@ class FinRepository(private val db: AppDatabase) {
             accountTail = parsed.accountTail,
             suggestedCategoryId = suggested?.id,
             smsHash = hash,
-            foreignCurrency = parsed.foreignCurrency
+            foreignCurrency = parsed.foreignCurrency,
+            note = parsed.note
         )
         return db.pendingSmsDao().insert(row) != -1L
     }

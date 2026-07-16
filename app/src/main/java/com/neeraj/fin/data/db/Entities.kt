@@ -68,7 +68,9 @@ data class PendingSms(
     val status: String = PendingStatus.PENDING,
     // ISO code when the SMS reported a foreign-currency spend; amountMinor is then
     // the foreign value and the user should correct it to INR when approving.
-    val foreignCurrency: String? = null
+    val foreignCurrency: String? = null,
+    // Purpose text parsed from the message ("For: Gas Cylinder Booking").
+    val note: String = ""
 )
 
 @Entity(tableName = "budgets")

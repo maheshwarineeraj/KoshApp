@@ -145,11 +145,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         return "%04d-%02d".format(d.year, d.monthValue)
     }
 
-    /** Bulk-approve pending items that already carry a confident suggestion. */
+    /** Bulk-approve selected pending items with their suggested values. */
     fun approveAllSuggested(items: List<com.neeraj.fin.data.db.PendingSms>) = viewModelScope.launch {
-        items.forEach { repo.approvePending(it, it.amountMinor, it.type, it.suggestedCategoryId, it.merchant, "") }
+        items.forEach { repo.approvePending(it, it.amountMinor, it.type, it.suggestedCategoryId, it.merchant, it.note) }
         toast("${items.size} transactions approved")
         afterTxnChange()
+    }
+
+    fun rejectSelected(items: List<com.neeraj.fin.data.db.PendingSms>) = viewModelScope.launch {
+        items.forEach { repo.rejectPending(it) }
+        toast("${items.size} rejected")
     }
 
     fun deleteRecurringRule(id: Long) = viewModelScope.launch {

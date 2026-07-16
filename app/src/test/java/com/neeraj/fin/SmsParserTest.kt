@@ -94,6 +94,17 @@ class SmsParserTest {
     }
 
     @Test
+    fun `purpose text becomes note and stops at boundaries`() {
+        val p = SmsParser.parse(
+            "VM-HDFCBK",
+            "Alert! Paid Rs. 649.00 For: Gas Cylinder Booking From HDFC Bank A/c XX8694 Via BillPay."
+        )
+        assertNotNull(p)
+        assertEquals("Gas Cylinder Booking", p!!.note)
+        assertEquals(649_00L, p.amountMinor)
+    }
+
+    @Test
     fun `credit parses as income`() {
         val p = SmsParser.parse("VM-SBIINB", "Rs.25,000.00 credited to A/c XX9999 by NEFT from ACME CORP on 01-07-26.")
         assertNotNull(p)

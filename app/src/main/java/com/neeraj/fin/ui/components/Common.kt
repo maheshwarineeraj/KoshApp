@@ -86,7 +86,8 @@ fun TxnRow(
             Text(
                 buildString {
                     append(if (isTransfer) "Transfer" else category?.name ?: "Uncategorized")
-                    if (txn.accountTail != null) append(" · a/c ··${txn.accountTail}")
+                    if (txn.note.isNotBlank()) append(" · ${txn.note}")
+                    else if (txn.accountTail != null) append(" · a/c ··${txn.accountTail}")
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

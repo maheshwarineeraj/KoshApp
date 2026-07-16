@@ -10,7 +10,9 @@ data class ParsedSms(
     val accountTail: String?,
     // Set when the SMS reports a spend in a foreign currency (e.g. "USD 23.60 spent");
     // amountMinor then holds the foreign value for the user to correct to INR on review.
-    val foreignCurrency: String? = null
+    val foreignCurrency: String? = null,
+    // Purpose text pulled from the message ("For: Gas Cylinder Booking") when present.
+    val note: String = ""
 )
 
 /**
@@ -142,7 +144,29 @@ object SmsParser {
         val merchant = if (type == TxnType.TRANSFER) "Credit card bill"
         else extractMerchant(text, type) ?: "Unknown"
 
-        return ParsedSms(amountMinor, type, merchant, accountTail, foreignCurrency)
+        return ParsedSms(amountMinor, type, merchant, accountTail, foreignCurrency, extractNote(text))
+    }
+
+    // "For: Gas Cylinder Booking From HDFC..." → note "Gas Cylinder Booking";
+    // stops at from/via/on/at/ref boundaries and punctuation.
+    private val noteRegex = Regex(
+        """\bfor:?\s+(?!upi\b|rs\.?(?:\s|\d)|inr\b|a/c\b|card\b)([A-Za-z][A-Za-z0-9 &._'\-]{2,40}?)(?=\s+(?:from|via|on|at|ref|txn|upi|a/c|to)\b|[.,;:\n]|$)""",
+        RegexOption.IGNORE_CASE
+    )
+
+    private fun extractNote(text: String): String {
+        val raw = noteRegex.find(text)?.groupValues?.get(1)?.trim() ?: return ""
+        return raw.split(" ").filter { it.isNotBlank() }
+            .joinToString(" ") { w -> w.lowercase().replaceFirstChar { it.uppercase() } }
+    }
+
+    /** Public keyword lookup so manual entry can suggest categories from typed text. */
+    fun suggestCategoryFromText(text: String, type: String): String? {
+        val hay = text.lowercase()
+        for ((keys, cat) in categoryKeywords) {
+            if (keys.any { hay.contains(it) }) return cat
+        }
+        return if (type == TxnType.INCOME) "Other Income" else null
     }
 
     /** True if the amount starting at [start] is preceded by a limit/balance/due label. */
@@ -186,19 +210,19 @@ object SmsParser {
     }
 
     private val categoryKeywords: List<Pair<List<String>, String>> = listOf(
-        listOf("swiggy", "zomato", "dominos", "pizza", "mcdonald", "kfc", "restaurant", "cafe", "eatclub", "faasos") to "Food & Dining",
-        listOf("bigbasket", "blinkit", "zepto", "grofers", "dmart", "grocery", "instamart", "jiomart") to "Groceries",
-        listOf("uber", "ola", "rapido", "redbus", "metro", "irctc rail", "fuel", "petrol", "hpcl", "iocl", "bpcl", "fastag") to "Transport",
-        listOf("amazon", "flipkart", "myntra", "ajio", "meesho", "nykaa", "croma", "reliance digital") to "Shopping",
-        listOf("electricity", "bescom", "msedcl", "tneb", "airtel", "jio", "vi ", "vodafone", "bsnl", "broadband", "dth", "tata sky", "gas bill", "water bill", "postpaid", "bill payment") to "Bills & Utilities",
-        listOf("netflix", "spotify", "hotstar", "prime video", "sonyliv", "bookmyshow", "pvr", "inox", "youtube premium") to "Entertainment",
-        listOf("pharmacy", "apollo", "1mg", "pharmeasy", "netmeds", "hospital", "clinic", "diagnostic", "practo") to "Health",
-        listOf("makemytrip", "goibibo", "cleartrip", "indigo", "air india", "vistara", "oyo", "airbnb", "yatra", "ixigo", "hotel") to "Travel",
-        listOf("udemy", "coursera", "byjus", "unacademy", "school fee", "tuition", "college") to "Education",
-        listOf("rent", "nobroker", "housing.com", "maintenance") to "Rent & Home",
+        listOf("swiggy", "zomato", "dominos", "pizza", "mcdonald", "kfc", "restaurant", "cafe", "eatclub", "faasos", "dinner", "lunch", "breakfast", "chai", "coffee", "tiffin", "biryani") to "Food & Dining",
+        listOf("bigbasket", "blinkit", "zepto", "grofers", "dmart", "grocery", "instamart", "jiomart", "kirana", "vegetable", "sabzi", "milk") to "Groceries",
+        listOf("uber", "ola", "rapido", "redbus", "metro", "irctc rail", "fuel", "petrol", "diesel", "hpcl", "iocl", "bpcl", "fastag", "cab", "taxi", "auto fare", "bus", "parking") to "Transport",
+        listOf("amazon", "flipkart", "myntra", "ajio", "meesho", "nykaa", "croma", "reliance digital", "clothes", "shoes") to "Shopping",
+        listOf("electricity", "bescom", "msedcl", "tneb", "airtel", "jio", "vi ", "vodafone", "bsnl", "broadband", "wifi", "dth", "tata sky", "gas bill", "gas cylinder", "cylinder", "lpg", "water bill", "postpaid", "bill payment", "recharge") to "Bills & Utilities",
+        listOf("netflix", "spotify", "hotstar", "prime video", "sonyliv", "bookmyshow", "pvr", "inox", "youtube premium", "movie") to "Entertainment",
+        listOf("pharmacy", "apollo", "1mg", "pharmeasy", "netmeds", "hospital", "clinic", "diagnostic", "practo", "medicine", "doctor", "dentist", "lab test") to "Health",
+        listOf("makemytrip", "goibibo", "cleartrip", "indigo", "air india", "vistara", "oyo", "airbnb", "yatra", "ixigo", "hotel", "flight", "trip") to "Travel",
+        listOf("udemy", "coursera", "byjus", "unacademy", "school fee", "tuition", "college", "exam fee", "books") to "Education",
+        listOf("rent", "nobroker", "housing.com", "maintenance", "plumber", "electrician", "repair", "furniture") to "Rent & Home",
         listOf("emi", "loan repay", "bajaj fin", "home credit") to "EMI & Loans",
         listOf("zerodha", "groww", "upstox", "mutual fund", "sip", "nps", "ppf", "etmoney", "indmoney", "kuvera") to "Investments",
-        listOf("salon", "spa", "urban company", "barber") to "Personal Care",
+        listOf("salon", "spa", "urban company", "barber", "hair", "parlour", "grooming", "facial") to "Personal Care",
         listOf("salary", "sal credit", "payroll") to "Salary",
         listOf("refund", "cashback", "reversal") to "Refunds & Cashback",
         listOf("interest", "dividend", "int.pd", "int credited") to "Interest & Dividends"
