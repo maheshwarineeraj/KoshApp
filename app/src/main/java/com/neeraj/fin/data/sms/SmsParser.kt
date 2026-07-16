@@ -243,3 +243,32 @@ object SmsParser {
         return h
     }
 }
+
+
+data class BillDue(val title: String, val amountMinor: Long, val dueDayHint: String)
+
+object BillDueParser {
+    private val duePhrase = Regex("""(?:is due|due on|due by|pay by|before)""", RegexOption.IGNORE_CASE)
+    private val amount = Regex("""(?:rs\.?|inr|₹)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)""", RegexOption.IGNORE_CASE)
+    private val biller = Regex(
+        """(electricity|power|water|gas|broadband|internet|mobile|postpaid|dth|credit card|card|insurance|premium|emi|loan|rent|maintenance|bill)""",
+        RegexOption.IGNORE_CASE
+    )
+
+    /**
+     * Detects "your bill of Rs X is due on <date>" style messages that the
+     * transaction parser rejects. Returns the raw text span holding the due
+     * date; actual date resolution happens in BillDueExtractor (ML Kit entity
+     * extraction with a regex fallback).
+     */
+    fun parse(sender: String, body: String): BillDue? {
+        if (SmsParser.looksLikePersonalSender(sender)) return null
+        if (!duePhrase.containsMatchIn(body)) return null
+        val amt = amount.find(body)?.groupValues?.get(1)?.replace(",", "")?.toDoubleOrNull() ?: return null
+        if (amt <= 0) return null
+        val what = biller.find(body)?.groupValues?.get(1)
+            ?.lowercase()?.replaceFirstChar { it.uppercase() } ?: return null
+        val title = if (what.equals("bill", true)) "Bill payment" else "$what bill"
+        return BillDue(title, (amt * 100).toLong(), body)
+    }
+}

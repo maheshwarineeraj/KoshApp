@@ -59,7 +59,17 @@ data class BackupGoal(
 data class BackupGoalContribution(val id: Long, val goalId: Long, val amountMinor: Long, val timestamp: Long, val note: String)
 
 @Serializable
-data class BackupEventBudget(val id: Long, val name: String, val emoji: String, val plannedMinor: Long, val createdAt: Long)
+data class BackupEventBudget(
+    val id: Long, val name: String, val emoji: String, val plannedMinor: Long, val createdAt: Long,
+    val startMillis: Long? = null, val endMillis: Long? = null
+)
+
+@Serializable
+data class BackupReminder(
+    val id: Long, val title: String, val amountMinor: Long, val recurrence: String,
+    val dayOfMonth: Int, val monthOfYear: Int, val dueMillis: Long?, val merchant: String,
+    val categoryId: Long?, val lastDoneKey: String?, val enabled: Boolean, val source: String
+)
 
 @Serializable
 data class BackupRecurringRule(
@@ -70,7 +80,7 @@ data class BackupRecurringRule(
 
 @Serializable
 data class BackupData(
-    val version: Int = 5,
+    val version: Int = 6,
     val exportedAtMillis: Long,
     val categories: List<BackupCategory>,
     val transactions: List<BackupTxn>,
@@ -84,7 +94,9 @@ data class BackupData(
     val recurringRules: List<BackupRecurringRule> = emptyList(),
     // v5: preferences, so a restore on a new device keeps the same experience
     val currencyCode: String? = null,
-    val smsAutoCapture: Boolean? = null
+    val smsAutoCapture: Boolean? = null,
+    // v6
+    val reminders: List<BackupReminder> = emptyList()
 )
 
 /**
@@ -115,12 +127,17 @@ class BackupManager(
             assetValues = snap.assetValues.map { BackupAssetValue(it.id, it.assetId, it.valueMinor, it.timestamp) },
             goals = snap.goals.map { BackupGoal(it.id, it.name, it.emoji, it.targetMinor, it.deadlineMillis, it.createdAt) },
             goalContributions = snap.goalContributions.map { BackupGoalContribution(it.id, it.goalId, it.amountMinor, it.timestamp, it.note) },
-            eventBudgets = snap.eventBudgets.map { BackupEventBudget(it.id, it.name, it.emoji, it.plannedMinor, it.createdAt) },
+            eventBudgets = snap.eventBudgets.map { BackupEventBudget(it.id, it.name, it.emoji, it.plannedMinor, it.createdAt, it.startMillis, it.endMillis) },
             recurringRules = snap.recurringRules.map {
                 BackupRecurringRule(it.id, it.amountMinor, it.type, it.categoryId, it.merchant, it.note, it.dayOfMonth, it.startMillis, it.lastAppliedKey)
             },
             currencyCode = settings.currencyCode.first(),
-            smsAutoCapture = settings.smsAutoCapture.first()
+            smsAutoCapture = settings.smsAutoCapture.first(),
+            reminders = snap.reminders.map {
+                BackupReminder(it.id, it.title, it.amountMinor, it.recurrence, it.dayOfMonth,
+                    it.monthOfYear, it.dueMillis, it.merchant, it.categoryId, it.lastDoneKey,
+                    it.enabled, it.source)
+            }
         )
         val plaintext = json.encodeToString(BackupData.serializer(), data).toByteArray(Charsets.UTF_8)
 
@@ -201,9 +218,14 @@ class BackupManager(
                 assetValues = data.assetValues.map { AssetValue(it.id, it.assetId, it.valueMinor, it.timestamp) },
                 goals = data.goals.map { Goal(it.id, it.name, it.emoji, it.targetMinor, it.deadlineMillis, it.createdAt) },
                 goalContributions = data.goalContributions.map { GoalContribution(it.id, it.goalId, it.amountMinor, it.timestamp, it.note) },
-                eventBudgets = data.eventBudgets.map { EventBudget(it.id, it.name, it.emoji, it.plannedMinor, it.createdAt) },
+                eventBudgets = data.eventBudgets.map { EventBudget(it.id, it.name, it.emoji, it.plannedMinor, it.createdAt, it.startMillis, it.endMillis) },
                 recurringRules = data.recurringRules.map {
                     RecurringRule(it.id, it.amountMinor, it.type, it.categoryId, it.merchant, it.note, it.dayOfMonth, it.startMillis, it.lastAppliedKey)
+                },
+                reminders = data.reminders.map {
+                    com.neeraj.fin.data.db.Reminder(it.id, it.title, it.amountMinor, it.recurrence,
+                        it.dayOfMonth, it.monthOfYear, it.dueMillis, it.merchant, it.categoryId,
+                        it.lastDoneKey, it.enabled, it.source)
                 }
             )
         )

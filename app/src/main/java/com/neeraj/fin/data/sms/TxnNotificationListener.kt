@@ -42,8 +42,16 @@ class TxnNotificationListener : NotificationListenerService() {
             // bank's own name for its app; personal numbers are filtered out
             // by the parser just like SMS senders.
             val sender = title.ifBlank { sbn.packageName }
-            val parsed = SmsParser.parse(sender, text) ?: return@launch
-            app.repository.offerParsedSms(sender, text, sbn.postTime, parsed)
+            val parsed = SmsParser.parse(sender, text)
+            if (parsed != null) {
+                app.repository.offerParsedSms(sender, text, sbn.postTime, parsed)
+            } else {
+                BillDueParser.parse(sender, text)?.let { bill ->
+                    com.neeraj.fin.util.BillDueExtractor.dueDateMillis(text)?.let { due ->
+                        app.repository.offerBillDueReminder(bill.title, bill.amountMinor, due)
+                    }
+                }
+            }
         }
     }
 }

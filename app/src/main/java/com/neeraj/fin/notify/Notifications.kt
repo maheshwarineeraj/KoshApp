@@ -25,6 +25,7 @@ object Notifications {
     private const val CHANNEL_ALERTS = "budget_alerts"
     private const val CHANNEL_REVIEW = "review_reminders"
     private const val CHANNEL_SUMMARY = "monthly_summary"
+    private const val CHANNEL_REMINDERS = "payment_reminders"
 
     fun ensureChannels(context: Context) {
         val nm = context.getSystemService(NotificationManager::class.java)
@@ -36,6 +37,9 @@ object Notifications {
         )
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_SUMMARY, "Monthly summary", NotificationManager.IMPORTANCE_LOW)
+        )
+        nm.createNotificationChannel(
+            NotificationChannel(CHANNEL_REMINDERS, "Payment reminders", NotificationManager.IMPORTANCE_DEFAULT)
         )
     }
 
@@ -173,5 +177,41 @@ object Notifications {
             "Wealth values need a refresh",
             "$names — update them so your net worth trend stays accurate."
         )
+    }
+
+    /** Due payment reminders: once per reminder per period, on/after the due day. */
+    suspend fun reminderNudge(app: FinApp) {
+        if (!app.settings.notificationsEnabled.first()) return
+        val today = LocalDate.now()
+        val due = app.repository.remindersOnce().filter { it.enabled && isDue(it, today) }
+        for (r in due) {
+            val marker = "reminder:${r.id}:${periodKey(r, today)}"
+            if (app.settings.isMarkerSet(marker)) continue
+            app.settings.setMarker(marker)
+            val amount = if (r.amountMinor > 0)
+                " of ${Format.money(r.amountMinor, app.settings.currencyCode.first())}" else ""
+            post(
+                app, CHANNEL_REMINDERS, (5000 + r.id).toInt(),
+                "Payment due: ${r.title}",
+                "Your ${r.title}$amount is due — mark it done in Kosh once paid."
+            )
+        }
+    }
+
+    fun isDue(r: com.neeraj.fin.data.db.Reminder, today: LocalDate): Boolean = when (r.recurrence) {
+        com.neeraj.fin.data.db.ReminderRecurrence.MONTHLY ->
+            today.dayOfMonth >= r.dayOfMonth && r.lastDoneKey != "%04d-%02d".format(today.year, today.monthValue)
+        com.neeraj.fin.data.db.ReminderRecurrence.YEARLY ->
+            (today.monthValue > r.monthOfYear ||
+                (today.monthValue == r.monthOfYear && today.dayOfMonth >= r.dayOfMonth)) &&
+                r.lastDoneKey != today.year.toString()
+        else -> r.lastDoneKey == null && r.dueMillis != null &&
+            !Format.toLocalDate(r.dueMillis).isAfter(today)
+    }
+
+    fun periodKey(r: com.neeraj.fin.data.db.Reminder, today: LocalDate): String = when (r.recurrence) {
+        com.neeraj.fin.data.db.ReminderRecurrence.MONTHLY -> "%04d-%02d".format(today.year, today.monthValue)
+        com.neeraj.fin.data.db.ReminderRecurrence.YEARLY -> today.year.toString()
+        else -> "once"
     }
 }

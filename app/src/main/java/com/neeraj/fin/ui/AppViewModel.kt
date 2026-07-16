@@ -58,6 +58,31 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val eventBudgets: StateFlow<List<EventBudget>> =
         repo.eventBudgets.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val reminders: StateFlow<List<com.neeraj.fin.data.db.Reminder>> =
+        repo.reminders.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Session-only dismissals for pattern suggestions.
+    private val _dismissedPatterns = MutableStateFlow(setOf<String>())
+    val dismissedPatterns: StateFlow<Set<String>> = _dismissedPatterns
+    fun dismissPattern(title: String) { _dismissedPatterns.value = _dismissedPatterns.value + title }
+
+    fun saveReminder(r: com.neeraj.fin.data.db.Reminder) = viewModelScope.launch {
+        repo.saveReminder(r); toast("Reminder saved")
+    }
+
+    fun deleteReminder(id: Long) = viewModelScope.launch { repo.deleteReminder(id) }
+
+    fun markReminderDone(r: com.neeraj.fin.data.db.Reminder) = viewModelScope.launch {
+        val today = java.time.LocalDate.now()
+        val key = when (r.recurrence) {
+            com.neeraj.fin.data.db.ReminderRecurrence.MONTHLY -> "%04d-%02d".format(today.year, today.monthValue)
+            com.neeraj.fin.data.db.ReminderRecurrence.YEARLY -> today.year.toString()
+            else -> "done"
+        }
+        repo.saveReminder(r.copy(lastDoneKey = key))
+        toast("Done for ${if (r.recurrence == "ONCE") "good" else "this period"} ✓")
+    }
+
     val recurringRules: StateFlow<List<RecurringRule>> =
         repo.recurringRules.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 

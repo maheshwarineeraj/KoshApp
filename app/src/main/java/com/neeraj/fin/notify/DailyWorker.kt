@@ -20,6 +20,7 @@ class DailyWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
         runCatching { Notifications.reviewNudge(app) }
         runCatching { Notifications.monthlySummary(app) }
         runCatching { Notifications.staleAssetNudge(app) }
+        runCatching { Notifications.reminderNudge(app) }
         runCatching { updateKoshWidget(applicationContext) }
         return Result.success()
     }

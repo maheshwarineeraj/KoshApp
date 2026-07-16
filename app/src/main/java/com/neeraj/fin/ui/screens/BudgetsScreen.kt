@@ -101,11 +101,13 @@ fun BudgetsScreen(vm: AppViewModel, nav: NavController) {
                 Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Monthly") })
                 Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Events") })
                 Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("Goals") })
+                Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("Remind") })
             }
             when (tab) {
                 0 -> CategoryBudgetsTab(vm)
                 1 -> EventBudgetsTab(vm, creatingEvent, onDialogHandled = { creatingEvent = false })
-                else -> GoalsTab(vm, creatingGoal, onDialogHandled = { creatingGoal = false })
+                2 -> GoalsTab(vm, creatingGoal, onDialogHandled = { creatingGoal = false })
+                else -> RemindersTab(vm)
             }
         }
     }
@@ -206,7 +208,7 @@ private fun EventBudgetsTab(vm: AppViewModel, creating: Boolean, onDialogHandled
 
 private val eventEmojis = listOf("🧳", "✈️", "🏖️", "💍", "🎉", "🎂", "🏠", "🛍️", "🎄", "🪔", "👶", "🎓")
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 private fun EventBudgetDialog(
     initial: com.neeraj.fin.data.db.EventBudget?,
@@ -220,6 +222,10 @@ private fun EventBudgetDialog(
         mutableStateOf(initial?.plannedMinor?.let { "%.0f".format(it / 100.0) } ?: "")
     }
     var confirmDelete by remember { mutableStateOf(false) }
+    var startMillis by remember { mutableStateOf(initial?.startMillis) }
+    var endMillis by remember { mutableStateOf(initial?.endMillis) }
+    var pickStart by remember { mutableStateOf(false) }
+    var pickEnd by remember { mutableStateOf(false) }
     val planned = Format.parseAmount(plannedText)
 
     Dialog(onDismissRequest = onDismiss) {
@@ -258,6 +264,19 @@ private fun EventBudgetDialog(
                     isError = plannedText.isNotBlank() && planned == null,
                     singleLine = true, modifier = Modifier.fillMaxWidth()
                 )
+                Text(
+                    "Trip dates (optional) — expenses in this window get tagged automatically",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    androidx.compose.material3.OutlinedButton(onClick = { pickStart = true }, modifier = Modifier.weight(1f)) {
+                        Text(startMillis?.let { Format.toLocalDate(it).toString() } ?: "Start date")
+                    }
+                    androidx.compose.material3.OutlinedButton(onClick = { pickEnd = true }, modifier = Modifier.weight(1f)) {
+                        Text(endMillis?.let { Format.toLocalDate(it).toString() } ?: "End date")
+                    }
+                }
                 Row(Modifier.fillMaxWidth()) {
                     if (onDelete != null) {
                         TextButton(onClick = { confirmDelete = true }) {
@@ -270,7 +289,8 @@ private fun EventBudgetDialog(
                         onClick = {
                             onSave(
                                 (initial ?: com.neeraj.fin.data.db.EventBudget(name = "", emoji = "", plannedMinor = 0))
-                                    .copy(name = name.trim(), emoji = emoji, plannedMinor = planned!!)
+                                    .copy(name = name.trim(), emoji = emoji, plannedMinor = planned!!,
+                                        startMillis = startMillis, endMillis = endMillis)
                             )
                         },
                         enabled = name.isNotBlank() && planned != null
@@ -278,6 +298,21 @@ private fun EventBudgetDialog(
                 }
             }
         }
+    }
+
+    if (pickStart || pickEnd) {
+        val state = androidx.compose.material3.rememberDatePickerState(
+            initialSelectedDateMillis = (if (pickStart) startMillis else endMillis) ?: System.currentTimeMillis()
+        )
+        androidx.compose.material3.DatePickerDialog(
+            onDismissRequest = { pickStart = false; pickEnd = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    state.selectedDateMillis?.let { if (pickStart) startMillis = it else endMillis = it }
+                    pickStart = false; pickEnd = false
+                }) { Text("OK") }
+            }
+        ) { androidx.compose.material3.DatePicker(state = state) }
     }
 
     if (confirmDelete) {
@@ -355,17 +390,27 @@ private fun CategoryBudgetsTab(vm: AppViewModel) {
         var text by remember(cat.id) {
             mutableStateOf(limits[cat.id]?.let { "%.0f".format(it / 100.0) } ?: "")
         }
+        // Budget seeding: median of the last 6 months' spend in this category, +10%.
+        val allTxns by vm.transactions.collectAsState()
+        val suggestion = remember(cat.id, allTxns) { suggestBudget(cat.id, allTxns) }
         AlertDialog(
             onDismissRequest = { editing = null },
             title = { Text("${cat.emoji} ${cat.name}") },
             text = {
-                OutlinedTextField(
-                    value = text,
-                    onValueChange = { text = it },
-                    label = { Text("Monthly limit (leave empty to remove)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = text,
+                        onValueChange = { text = it },
+                        label = { Text("Monthly limit (leave empty to remove)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true
+                    )
+                    if (suggestion != null) {
+                        TextButton(onClick = { text = "%.0f".format(suggestion / 100.0) }) {
+                            Text("Suggest: ${Format.money(suggestion, currency, withDecimals = false)} (your median month +10%)")
+                        }
+                    }
+                }
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -649,4 +694,21 @@ private fun GoalDialog(
             onDismiss = { confirmDelete = false }
         )
     }
+}
+
+
+/** Median monthly spend for a category over the last 6 months with data, +10%, rounded to ₹100. */
+private fun suggestBudget(categoryId: Long, txns: List<com.neeraj.fin.data.db.Txn>): Long? {
+    val zone = java.time.ZoneId.systemDefault()
+    val byMonth = txns.filter {
+        it.type == com.neeraj.fin.data.db.TxnType.EXPENSE && it.categoryId == categoryId &&
+            it.timestamp >= java.time.LocalDate.now().minusMonths(6).withDayOfMonth(1)
+                .atStartOfDay(zone).toInstant().toEpochMilli()
+    }.groupBy {
+        val d = Format.toLocalDate(it.timestamp); "%04d-%02d".format(d.year, d.monthValue)
+    }.mapValues { (_, v) -> v.sumOf { it.amountMinor } }
+        .values.sorted()
+    if (byMonth.size < 3) return null
+    val median = byMonth[byMonth.size / 2]
+    return (median * 110 / 100 + 9999) / 10000 * 10000  // round up to ₹100
 }

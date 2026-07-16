@@ -77,6 +77,7 @@ fun EditTxnScreen(vm: AppViewModel, nav: NavController, txnId: Long) {
     var note by remember(existing?.id) { mutableStateOf(existing?.note ?: "") }
     var timestamp by remember(existing?.id) { mutableStateOf(existing?.timestamp ?: System.currentTimeMillis()) }
     var eventBudgetId by remember(existing?.id) { mutableStateOf(existing?.eventBudgetId) }
+    var eventTouched by remember(existing?.id) { mutableStateOf(existing != null) }
     var goalId by remember(existing?.id) { mutableStateOf(existing?.goalId) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showDelete by remember { mutableStateOf(false) }
@@ -102,6 +103,53 @@ fun EditTxnScreen(vm: AppViewModel, nav: NavController, txnId: Long) {
         }
     }
 
+    // ML Kit document scanner: opens the camera with edge detection and
+    // auto-crop; falls back to the photo picker where Play services lacks it.
+    val docScanLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
+                .fromActivityResultIntent(result.data)
+                ?.pages?.firstOrNull()?.imageUri?.let { uri ->
+                    scanning = true
+                    scope.launch {
+                        val r = runCatching { ReceiptScanner.scan(context, uri) }.getOrNull()
+                        scanning = false
+                        if (r?.amountMinor != null) {
+                            amountText = "%.2f".format(r.amountMinor / 100.0).removeSuffix(".00")
+                        }
+                        r?.merchant?.let { if (merchant.isBlank()) merchant = it }
+                    }
+                }
+        }
+    }
+    fun startReceiptScan() {
+        val options = com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions.Builder()
+            .setGalleryImportAllowed(true)
+            .setPageLimit(1)
+            .setResultFormats(com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions.RESULT_FORMAT_JPEG)
+            .setScannerMode(com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions.SCANNER_MODE_BASE)
+            .build()
+        val activity = context as? android.app.Activity
+        if (activity != null) {
+            com.google.mlkit.vision.documentscanner.GmsDocumentScanning.getClient(options)
+                .getStartScanIntent(activity)
+                .addOnSuccessListener { sender ->
+                    docScanLauncher.launch(androidx.activity.result.IntentSenderRequest.Builder(sender).build())
+                }
+                .addOnFailureListener {
+                    receiptPicker.launch(
+                        androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                }
+        } else {
+            receiptPicker.launch(
+                androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+            )
+        }
+    }
+
     val amountMinor = Format.parseAmount(amountText)
     val matchingCats = categories.filter { it.kind == type }
 
@@ -116,13 +164,9 @@ fun EditTxnScreen(vm: AppViewModel, nav: NavController, txnId: Long) {
                 },
                 actions = {
                     if (existing == null) {
-                        TextButton(onClick = {
-                            receiptPicker.launch(
-                                androidx.activity.result.PickVisualMediaRequest(
-                                    ActivityResultContracts.PickVisualMedia.ImageOnly
-                                )
-                            )
-                        }) { Text(if (scanning) "Scanning…" else "📷 Scan receipt") }
+                        TextButton(onClick = { startReceiptScan() }) {
+                            Text(if (scanning) "Scanning…" else "📷 Scan receipt")
+                        }
                     }
                     if (existing != null && existing.type != TxnType.TRANSFER) {
                         TextButton(onClick = { showSplit = true }) { Text("Split") }
@@ -210,13 +254,26 @@ fun EditTxnScreen(vm: AppViewModel, nav: NavController, txnId: Long) {
             )
 
             if (type == TxnType.EXPENSE && eventBudgets.isNotEmpty()) {
+                // Trip mode: while the date falls inside an event's window,
+                // pre-tag the expense to it until the user chooses otherwise.
+                androidx.compose.runtime.LaunchedEffect(timestamp, type, eventBudgets) {
+                    if (!eventTouched && eventBudgetId == null) {
+                        eventBudgets.firstOrNull { b ->
+                            b.startMillis != null && b.endMillis != null &&
+                                timestamp >= b.startMillis && timestamp < b.endMillis + 86_400_000L
+                        }?.let { eventBudgetId = it.id }
+                    }
+                }
                 Column {
                     Text("Part of a budget? (optional)", style = MaterialTheme.typography.labelLarge)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         eventBudgets.forEach { b ->
                             FilterChip(
                                 selected = eventBudgetId == b.id,
-                                onClick = { eventBudgetId = if (eventBudgetId == b.id) null else b.id },
+                                onClick = {
+                                    eventTouched = true
+                                    eventBudgetId = if (eventBudgetId == b.id) null else b.id
+                                },
                                 label = { Text("${b.emoji} ${b.name}") }
                             )
                         }
@@ -569,7 +626,10 @@ private fun strongCategorySuggestions(
 ): List<com.neeraj.fin.data.db.Category> {
     val result = mutableListOf<com.neeraj.fin.data.db.Category>()
     if (merchant.trim().length >= 3) {
-        txns.filter { it.categoryId != null && it.merchant.equals(merchant.trim(), ignoreCase = true) }
+        txns.filter {
+            it.categoryId != null &&
+                com.neeraj.fin.util.Merchants.same(it.merchant, merchant.trim())
+        }
             .groupBy { it.categoryId }
             .entries.sortedByDescending { it.value.size }
             .mapNotNull { (id, _) -> matchingCats.firstOrNull { it.id == id } }

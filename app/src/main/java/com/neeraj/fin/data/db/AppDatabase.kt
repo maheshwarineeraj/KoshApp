@@ -11,9 +11,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
     entities = [
         Category::class, Txn::class, PendingSms::class, Budget::class,
         Asset::class, AssetValue::class, Goal::class, GoalContribution::class,
-        EventBudget::class, RecurringRule::class
+        EventBudget::class, RecurringRule::class, Reminder::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -25,6 +25,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun goalDao(): GoalDao
     abstract fun eventBudgetDao(): EventBudgetDao
     abstract fun recurringRuleDao(): RecurringRuleDao
+    abstract fun reminderDao(): ReminderDao
 
     companion object {
         private val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -65,6 +66,21 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `event_budgets` ADD COLUMN `startMillis` INTEGER")
+                db.execSQL("ALTER TABLE `event_budgets` ADD COLUMN `endMillis` INTEGER")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `reminders` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL, " +
+                        "`amountMinor` INTEGER NOT NULL, `recurrence` TEXT NOT NULL, " +
+                        "`dayOfMonth` INTEGER NOT NULL, `monthOfYear` INTEGER NOT NULL, " +
+                        "`dueMillis` INTEGER, `merchant` TEXT NOT NULL, `categoryId` INTEGER, " +
+                        "`lastDoneKey` TEXT, `enabled` INTEGER NOT NULL, `source` TEXT NOT NULL)"
+                )
+            }
+        }
+
         @Volatile
         private var instance: AppDatabase? = null
 
@@ -74,7 +90,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "fin.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7).build().also { instance = it }
             }
     }
 }

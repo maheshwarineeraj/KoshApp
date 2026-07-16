@@ -237,6 +237,14 @@ fun HomeScreen(vm: AppViewModel, nav: NavController) {
                         modifier = Modifier.padding(horizontal = 20.dp)
                     )
                 }
+                paydayLine(txns, currency)?.let { line ->
+                    Text(
+                        line,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 20.dp)
+                    )
+                }
             }
 
             item {
@@ -395,4 +403,44 @@ private fun baselineLine(txns: List<com.neeraj.fin.data.db.Txn>, currency: Strin
     }
     return "You usually spend ~${com.neeraj.fin.util.Format.compact(usual, currency)} by day $day — " +
         "this month ${com.neeraj.fin.util.Format.compact(current, currency)}, $compare."
+}
+
+
+/**
+ * Payday awareness: infer the salary day from the largest income of each of
+ * the last few months (needs 2+ months agreeing within ±3 days), then frame
+ * the month around it: money kept since payday and a safe daily pace.
+ */
+private fun paydayLine(txns: List<com.neeraj.fin.data.db.Txn>, currency: String): String? {
+    val today = java.time.LocalDate.now()
+    val zone = java.time.ZoneId.systemDefault()
+    val incomes = txns.filter { it.type == com.neeraj.fin.data.db.TxnType.INCOME }
+    val biggestPerMonth = incomes.groupBy {
+        val d = Format.toLocalDate(it.timestamp); "%04d-%02d".format(d.year, d.monthValue)
+    }.values.mapNotNull { v -> v.maxByOrNull { it.amountMinor } }
+        .sortedByDescending { it.timestamp }
+        .take(4)
+    if (biggestPerMonth.size < 2) return null
+    val days = biggestPerMonth.map { Format.toLocalDate(it.timestamp).dayOfMonth }
+    if (days.max() - days.min() > 6) return null
+    val payday = days.sorted()[days.size / 2].coerceIn(1, 28)
+
+    val lastPayday = if (today.dayOfMonth >= payday) today.withDayOfMonth(payday)
+    else today.minusMonths(1).withDayOfMonth(payday)
+    val nextPayday = lastPayday.plusMonths(1)
+    val daysLeft = java.time.temporal.ChronoUnit.DAYS.between(today, nextPayday).toInt()
+    if (daysLeft <= 0) return null
+
+    val from = lastPayday.atStartOfDay(zone).toInstant().toEpochMilli()
+    val kept = txns.filter { it.timestamp >= from }.sumOf {
+        when (it.type) {
+            com.neeraj.fin.data.db.TxnType.INCOME -> it.amountMinor
+            com.neeraj.fin.data.db.TxnType.EXPENSE -> -it.amountMinor
+            else -> 0L
+        }
+    }
+    return if (kept > 0)
+        "${Format.compact(kept, currency)} kept since payday · $daysLeft days to next (≈${Format.compact(kept / daysLeft, currency)}/day to stay ahead)."
+    else
+        "$daysLeft days till payday — you've spent ${Format.compact(-kept, currency)} more than you earned since the last one."
 }

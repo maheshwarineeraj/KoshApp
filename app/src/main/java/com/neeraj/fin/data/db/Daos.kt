@@ -262,3 +262,25 @@ interface BudgetDao {
     @Query("DELETE FROM budgets")
     suspend fun clear()
 }
+
+
+@Dao
+interface ReminderDao {
+    @Query("SELECT * FROM reminders ORDER BY enabled DESC, dayOfMonth ASC")
+    fun all(): Flow<List<Reminder>>
+
+    @Query("SELECT * FROM reminders")
+    suspend fun allOnce(): List<Reminder>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(reminder: Reminder): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(reminders: List<Reminder>)
+
+    @Query("DELETE FROM reminders WHERE id = :id")
+    suspend fun delete(id: Long)
+
+    @Query("DELETE FROM reminders")
+    suspend fun clear()
+}

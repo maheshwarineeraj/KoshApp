@@ -164,7 +164,10 @@ data class EventBudget(
     val name: String,
     val emoji: String,
     val plannedMinor: Long,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    // Optional trip window: expenses dated inside it get auto-suggested for tagging.
+    val startMillis: Long? = null,
+    val endMillis: Long? = null
 )
 
 /** A savings goal (trip, wedding, emergency fund) with a target amount. */
@@ -185,4 +188,38 @@ data class GoalContribution(
     val amountMinor: Long,
     val timestamp: Long,
     val note: String = ""
+)
+
+
+object ReminderRecurrence {
+    const val ONCE = "ONCE"
+    const val MONTHLY = "MONTHLY"
+    const val YEARLY = "YEARLY"
+}
+
+object ReminderSource {
+    const val MANUAL = "MANUAL"
+    const val PATTERN = "PATTERN"   // suggested from repeated payments
+    const val SMS = "SMS"           // suggested from a bill-due message
+}
+
+/**
+ * A payment the user must perform (rent transfer, manual SIP, insurance
+ * premium) — unlike RecurringRule, nothing is recorded automatically.
+ * Suggested reminders arrive with enabled=false until accepted.
+ */
+@Entity(tableName = "reminders")
+data class Reminder(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val title: String,
+    val amountMinor: Long = 0,          // 0 = amount not fixed
+    val recurrence: String = ReminderRecurrence.MONTHLY,
+    val dayOfMonth: Int = 1,            // MONTHLY/YEARLY: due day (1..28)
+    val monthOfYear: Int = 1,           // YEARLY only
+    val dueMillis: Long? = null,        // ONCE only
+    val merchant: String = "",
+    val categoryId: Long? = null,
+    val lastDoneKey: String? = null,    // "2026-07" monthly · "2026" yearly · "done" once
+    val enabled: Boolean = true,
+    val source: String = ReminderSource.MANUAL
 )

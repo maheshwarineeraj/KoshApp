@@ -31,8 +31,16 @@ class SmsReceiver : BroadcastReceiver() {
                 for ((sender, parts) in bySender) {
                     val body = parts.joinToString("") { it.messageBody ?: "" }
                     val timestamp = parts.first().timestampMillis
-                    val parsed = SmsParser.parse(sender, body) ?: continue
-                    app.repository.offerParsedSms(sender, body, timestamp, parsed)
+                    val parsed = SmsParser.parse(sender, body)
+                    if (parsed != null) {
+                        app.repository.offerParsedSms(sender, body, timestamp, parsed)
+                    } else {
+                        BillDueParser.parse(sender, body)?.let { bill ->
+                            com.neeraj.fin.util.BillDueExtractor.dueDateMillis(body)?.let { due ->
+                                app.repository.offerBillDueReminder(bill.title, bill.amountMinor, due)
+                            }
+                        }
+                    }
                 }
             } finally {
                 pendingResult.finish()

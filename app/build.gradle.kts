@@ -96,6 +96,10 @@ dependencies {
     // On-device OCR for receipt scanning; the recognizer model lives in Google
     // Play services (unbundled), so the app itself stays small and offline.
     implementation(libs.mlkit.text.recognition)
+    // On-device date/amount extraction for bill-due SMS -> reminder suggestions.
+    implementation(libs.mlkit.entity.extraction)
+    // Camera document scanner for receipts (edge detection, auto-crop).
+    implementation(libs.mlkit.doc.scanner)
     implementation(libs.kotlinx.serialization.json)
     testImplementation("junit:junit:4.13.2")
 }

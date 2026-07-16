@@ -208,7 +208,7 @@ private fun OverviewTab(vm: AppViewModel) {
 
             item {
                 val topMerchants = txns.filter { it.type == TxnType.EXPENSE && it.merchant.isNotBlank() }
-                    .groupBy { it.merchant.lowercase() }
+                    .groupBy { com.neeraj.fin.util.Merchants.key(it.merchant) }
                     .map { (_, group) -> Triple(group.first().merchant, group.sumOf { it.amountMinor }, group.size) }
                     .sortedByDescending { it.second }
                     .take(5)
