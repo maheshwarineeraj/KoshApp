@@ -284,3 +284,28 @@ interface ReminderDao {
     @Query("DELETE FROM reminders")
     suspend fun clear()
 }
+
+
+@Dao
+interface PocketDao {
+    @Query("SELECT * FROM pockets ORDER BY createdAt")
+    fun all(): Flow<List<Pocket>>
+
+    @Query("SELECT * FROM pockets")
+    suspend fun allOnce(): List<Pocket>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(pocket: Pocket): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(pockets: List<Pocket>)
+
+    @Query("DELETE FROM pockets WHERE id = :id")
+    suspend fun delete(id: Long)
+
+    @Query("UPDATE transactions SET pocketId = NULL WHERE pocketId = :id")
+    suspend fun clearTxnTags(id: Long)
+
+    @Query("DELETE FROM pockets")
+    suspend fun clear()
+}

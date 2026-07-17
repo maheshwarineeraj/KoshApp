@@ -11,9 +11,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
     entities = [
         Category::class, Txn::class, PendingSms::class, Budget::class,
         Asset::class, AssetValue::class, Goal::class, GoalContribution::class,
-        EventBudget::class, RecurringRule::class, Reminder::class
+        EventBudget::class, RecurringRule::class, Reminder::class, Pocket::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -26,6 +26,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun eventBudgetDao(): EventBudgetDao
     abstract fun recurringRuleDao(): RecurringRuleDao
     abstract fun reminderDao(): ReminderDao
+    abstract fun pocketDao(): PocketDao
 
     companion object {
         private val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -81,6 +82,18 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `transactions` ADD COLUMN `pocketId` INTEGER")
+                db.execSQL("ALTER TABLE `pending_sms` ADD COLUMN `pocketId` INTEGER")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `pockets` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, " +
+                        "`emoji` TEXT NOT NULL, `accountTails` TEXT NOT NULL, `createdAt` INTEGER NOT NULL)"
+                )
+            }
+        }
+
         @Volatile
         private var instance: AppDatabase? = null
 
@@ -90,7 +103,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "fin.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8).build().also { instance = it }
             }
     }
 }

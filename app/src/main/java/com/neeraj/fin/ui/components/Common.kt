@@ -2,6 +2,8 @@ package com.neeraj.fin.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -145,3 +147,46 @@ fun ConfirmDialog(
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }
+
+
+/** Sentinel-based pocket filter: -1 = all pockets, 0 = Personal (null), else pocket id. */
+fun com.neeraj.fin.data.db.Txn.inPocket(sel: Long): Boolean = when (sel) {
+    -1L -> true
+    0L -> pocketId == null
+    else -> pocketId == sel
+}
+
+@Composable
+fun PocketFilterRow(
+    pockets: List<com.neeraj.fin.data.db.Pocket>,
+    selected: Long,
+    onSelect: (Long) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (pockets.isEmpty()) return
+    Row(
+        modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
+    ) {
+        androidx.compose.material3.FilterChip(
+            selected = selected == -1L, onClick = { onSelect(-1L) },
+            label = { Text("All pockets") }
+        )
+        androidx.compose.material3.FilterChip(
+            selected = selected == 0L, onClick = { onSelect(0L) },
+            label = { Text("👤 Personal") }
+        )
+        pockets.forEach { p ->
+            androidx.compose.material3.FilterChip(
+                selected = selected == p.id, onClick = { onSelect(p.id) },
+                label = { Text("${p.emoji} ${p.name}") }
+            )
+        }
+    }
+}
+
+
+fun txnInPocket(t: com.neeraj.fin.data.db.Txn, sel: Long): Boolean = t.inPocket(sel)

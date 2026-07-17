@@ -83,7 +83,7 @@ object Notifications {
 
         for (budget in snap.budgets) {
             val cat = catById[budget.categoryId] ?: continue
-            val spent = txns.filter { it.type == TxnType.EXPENSE && it.categoryId == budget.categoryId }
+            val spent = txns.filter { it.type == TxnType.EXPENSE && it.categoryId == budget.categoryId && it.pocketId == null }
                 .sumOf { it.amountMinor }
             val pct = if (budget.monthlyLimitMinor > 0) spent * 100 / budget.monthlyLimitMinor else 0
             val level = when {

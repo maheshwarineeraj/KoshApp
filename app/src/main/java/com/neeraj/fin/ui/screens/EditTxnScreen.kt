@@ -64,6 +64,7 @@ fun EditTxnScreen(vm: AppViewModel, nav: NavController, txnId: Long) {
     val categories by vm.categories.collectAsState()
     val currency by vm.currencyCode.collectAsState()
     val eventBudgets by vm.eventBudgets.collectAsState()
+    val pockets by vm.pockets.collectAsState()
     val goals by vm.goals.collectAsState()
     val existing = txns.firstOrNull { it.id == txnId }
 
@@ -79,6 +80,8 @@ fun EditTxnScreen(vm: AppViewModel, nav: NavController, txnId: Long) {
     var eventBudgetId by remember(existing?.id) { mutableStateOf(existing?.eventBudgetId) }
     var eventTouched by remember(existing?.id) { mutableStateOf(existing != null) }
     var goalId by remember(existing?.id) { mutableStateOf(existing?.goalId) }
+    var pocketId by remember(existing?.id) { mutableStateOf(existing?.pocketId) }
+    var pocketTouched by remember(existing?.id) { mutableStateOf(existing != null) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showDelete by remember { mutableStateOf(false) }
     var showSplit by remember { mutableStateOf(false) }
@@ -458,6 +461,74 @@ fun EditTxnScreen(vm: AppViewModel, nav: NavController, txnId: Long) {
                 }
             }
 
+            if (pockets.isNotEmpty()) {
+                // Smart pocket routing for manual entry: the pocket you last used
+                // for this merchant wins, until you pick one yourself.
+                androidx.compose.runtime.LaunchedEffect(merchant, pockets, txns) {
+                    if (!pocketTouched && merchant.trim().length >= 3) {
+                        val learned = txns.firstOrNull {
+                            it.pocketId != null &&
+                                com.neeraj.fin.util.Merchants.same(it.merchant, merchant.trim())
+                        }?.pocketId
+                        pocketId = learned
+                    }
+                }
+                Column {
+                    Text("Pocket", style = MaterialTheme.typography.labelLarge)
+                    var showPocketPicker by remember { mutableStateOf(false) }
+                    val usage = txns.filter { it.pocketId != null }.groupBy { it.pocketId }
+                        .mapValues { it.value.size }
+                    val suggested = (listOfNotNull(pockets.firstOrNull { it.id == pocketId }) +
+                        pockets.sortedByDescending { usage[it.id] ?: 0 }).distinctBy { it.id }.take(2)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = pocketId == null,
+                            onClick = { pocketTouched = true; pocketId = null },
+                            label = { Text("👤 Personal") }
+                        )
+                        suggested.forEach { pk ->
+                            FilterChip(
+                                selected = pocketId == pk.id,
+                                onClick = { pocketTouched = true; pocketId = pk.id },
+                                label = { Text("${pk.emoji} ${pk.name}") }
+                            )
+                        }
+                        if (pockets.size > suggested.size) {
+                            FilterChip(selected = false, onClick = { showPocketPicker = true }, label = { Text("All ▾") })
+                        }
+                    }
+                    if (showPocketPicker) {
+                        androidx.compose.material3.AlertDialog(
+                            onDismissRequest = { showPocketPicker = false },
+                            title = { Text("Pocket") },
+                            text = {
+                                Column(Modifier.verticalScroll(rememberScrollState())) {
+                                    Text(
+                                        "👤 Personal",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        modifier = Modifier.fillMaxWidth()
+                                            .clickable { pocketTouched = true; pocketId = null; showPocketPicker = false }
+                                            .padding(vertical = 10.dp)
+                                    )
+                                    pockets.forEach { pk ->
+                                        Text(
+                                            "${pk.emoji} ${pk.name}",
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            modifier = Modifier.fillMaxWidth()
+                                                .clickable { pocketTouched = true; pocketId = pk.id; showPocketPicker = false }
+                                                .padding(vertical = 10.dp)
+                                        )
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = { showPocketPicker = false }) { Text("Close") }
+                            }
+                        )
+                    }
+                }
+            }
+
             OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) {
                 Text(Format.dateTime(timestamp))
             }
@@ -473,7 +544,8 @@ fun EditTxnScreen(vm: AppViewModel, nav: NavController, txnId: Long) {
                             note = note.trim(),
                             timestamp = timestamp,
                             eventBudgetId = if (type == TxnType.EXPENSE) eventBudgetId else null,
-                            goalId = if (type == TxnType.INCOME) goalId else null
+                            goalId = if (type == TxnType.INCOME) goalId else null,
+                            pocketId = pocketId
                         )
                     )
                     nav.popBackStack()

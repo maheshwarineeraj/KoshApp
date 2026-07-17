@@ -1,11 +1,13 @@
 package com.neeraj.fin.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -53,7 +55,7 @@ import java.time.LocalDate
 import kotlin.math.abs
 
 @Composable
-fun InsightsScreen(vm: AppViewModel) {
+fun InsightsScreen(vm: AppViewModel, nav: androidx.navigation.NavController) {
     var tab by remember { mutableStateOf(0) }
     Column(Modifier.fillMaxSize()) {
         TabRow(selectedTabIndex = tab) {
@@ -61,14 +63,14 @@ fun InsightsScreen(vm: AppViewModel) {
             Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Compare") })
         }
         when (tab) {
-            0 -> OverviewTab(vm)
-            else -> CompareTab(vm)
+            0 -> OverviewTab(vm, nav)
+            else -> CompareTab(vm, nav)
         }
     }
 }
 
 @Composable
-private fun OverviewTab(vm: AppViewModel) {
+private fun OverviewTab(vm: AppViewModel, nav: androidx.navigation.NavController) {
     val categories by vm.categories.collectAsState()
     val currency by vm.currencyCode.collectAsState()
 
@@ -76,9 +78,14 @@ private fun OverviewTab(vm: AppViewModel) {
     var anchor by remember { mutableStateOf(LocalDate.now()) }
     var breakdownType by remember { mutableStateOf(TxnType.EXPENSE) }
 
+    val pocketsList by vm.pockets.collectAsState()
+    var pocketSel by remember { mutableStateOf(-1L) }
+    var drill by remember { mutableStateOf<Pair<String, List<Txn>>?>(null) }
+
     val range = remember(kind, anchor) { Periods.rangeFor(kind, anchor) }
-    val txns by remember(range) { vm.txnsBetween(range.startMillis, range.endMillis) }
+    val rawTxns by remember(range) { vm.txnsBetween(range.startMillis, range.endMillis) }
         .collectAsState(initial = emptyList())
+    val txns = rawTxns.filter { com.neeraj.fin.ui.components.txnInPocket(it, pocketSel) }
 
     val income = txns.filter { it.type == TxnType.INCOME }.sumOf { it.amountMinor }
     val expense = txns.filter { it.type == TxnType.EXPENSE }.sumOf { it.amountMinor }
@@ -98,6 +105,10 @@ private fun OverviewTab(vm: AppViewModel) {
                     )
                 }
             }
+        }
+
+        item {
+            com.neeraj.fin.ui.components.PocketFilterRow(pocketsList, pocketSel, { pocketSel = it })
         }
 
         item {
@@ -179,6 +190,10 @@ private fun OverviewTab(vm: AppViewModel) {
                         }
                         CategoryBreakdown(
                             txns.filter { it.type == breakdownType },
+                            onCategoryClick = { cat ->
+                                drill = ("${cat?.emoji ?: "❓"} ${cat?.name ?: "Uncategorized"} · ${range.label}") to
+                                    txns.filter { it.type == breakdownType && it.categoryId == cat?.id }
+                            },
                             catById, currency,
                             if (breakdownType == TxnType.EXPENSE) "spent" else "earned"
                         )
@@ -217,7 +232,12 @@ private fun OverviewTab(vm: AppViewModel) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text("Top merchants", style = MaterialTheme.typography.titleMedium)
                             topMerchants.forEach { (name, total, count) ->
-                                Row {
+                                Row(Modifier.clickable {
+                                    drill = ("$name · ${range.label}") to txns.filter {
+                                        it.type == TxnType.EXPENSE &&
+                                            com.neeraj.fin.util.Merchants.same(it.merchant, name)
+                                    }
+                                }) {
                                     Column(Modifier.weight(1f)) {
                                         Text(name, style = MaterialTheme.typography.bodyMedium)
                                         Text(
@@ -309,6 +329,12 @@ private fun OverviewTab(vm: AppViewModel) {
 
         item { Spacer(Modifier.height(24.dp)) }
     }
+
+    drill?.let { (title, list) ->
+        TxnDrillSheet(title, list, catById, currency,
+            onOpen = { id -> drill = null; nav.navigate("edit/$id") },
+            onDismiss = { drill = null })
+    }
 }
 
 private data class DetectedSubscription(val merchant: String, val amountMinor: Long, val nextExpected: Long)
@@ -359,6 +385,7 @@ private fun SummaryCard(label: String, amount: Long, color: Color, currency: Str
 @Composable
 private fun CategoryBreakdown(
     txns: List<Txn>,
+    onCategoryClick: (Category?) -> Unit = {},
     catById: Map<Long, Category>,
     currency: String,
     verb: String
@@ -380,7 +407,7 @@ private fun CategoryBreakdown(
             modifier = Modifier.fillMaxWidth()
         )
         byCat.take(6).forEach { (cat, sum) ->
-            Column {
+            Column(Modifier.clickable { onCategoryClick(cat) }) {
                 Row {
                     Text(
                         "${cat?.emoji ?: "❓"} ${cat?.name ?: "Uncategorized"}",
@@ -404,12 +431,13 @@ private fun CategoryBreakdown(
 }
 
 @Composable
-private fun CompareTab(vm: AppViewModel) {
+private fun CompareTab(vm: AppViewModel, nav: androidx.navigation.NavController) {
     val categories by vm.categories.collectAsState()
     val currency by vm.currencyCode.collectAsState()
     var kind by remember { mutableStateOf(CompareKind.MOM) }
 
     val (cur, prev) = remember(kind) { Periods.compareRanges(kind) }
+    var drill by remember { mutableStateOf<Pair<String, List<Txn>>?>(null) }
     val curTxns by remember(cur) { vm.txnsBetween(cur.startMillis, cur.endMillis) }
         .collectAsState(initial = emptyList())
     val prevTxns by remember(prev) { vm.txnsBetween(prev.startMillis, prev.endMillis) }
@@ -488,7 +516,15 @@ private fun CompareTab(vm: AppViewModel) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("Biggest movers (expenses)", style = MaterialTheme.typography.titleMedium)
                         rows.forEach { (cat, curV, prevV) ->
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.clickable {
+                                    drill = ("${cat?.emoji ?: "❓"} ${cat?.name ?: "Uncategorized"} · both periods") to
+                                        (curTxns + prevTxns).filter {
+                                            it.type == TxnType.EXPENSE && it.categoryId == cat?.id
+                                        }.sortedByDescending { it.timestamp }
+                                }
+                            ) {
                                 Text(
                                     "${cat?.emoji ?: "❓"} ${cat?.name ?: "Uncategorized"}",
                                     style = MaterialTheme.typography.bodyMedium,
@@ -521,6 +557,12 @@ private fun CompareTab(vm: AppViewModel) {
         }
 
         item { Spacer(Modifier.height(24.dp)) }
+    }
+
+    drill?.let { (title, list) ->
+        TxnDrillSheet(title, list, catById, currency,
+            onOpen = { id -> drill = null; nav.navigate("edit/$id") },
+            onDismiss = { drill = null })
     }
 }
 
@@ -605,4 +647,43 @@ private fun buildDigest(
         else "You spent more than you earned this period."
     }
     return lines
+}
+
+
+/** Bottom sheet listing the transactions behind a tapped insight. */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun TxnDrillSheet(
+    title: String,
+    txns: List<Txn>,
+    catById: Map<Long, Category>,
+    currency: String,
+    onOpen: (Long) -> Unit,
+    onDismiss: () -> Unit
+) {
+    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
+            Text(
+                "${txns.size} transaction${if (txns.size == 1) "" else "s"} · ${Format.money(txns.sumOf { it.amountMinor }, currency)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+            androidx.compose.foundation.lazy.LazyColumn(
+                Modifier.heightIn(max = 480.dp)
+            ) {
+                items(txns.size, key = { txns[it].id }) { i ->
+                    com.neeraj.fin.ui.components.TxnRow(txns[i], catById[txns[i].categoryId], currency) {
+                        onOpen(txns[i].id)
+                    }
+                }
+            }
+        }
+    }
 }

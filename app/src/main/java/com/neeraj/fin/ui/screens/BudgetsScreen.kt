@@ -352,7 +352,7 @@ private fun CategoryBudgetsTab(vm: AppViewModel) {
         items(expenseCats.size, key = { expenseCats[it].id }) { i ->
             val cat = expenseCats[i]
             val limit = limits[cat.id]
-            val spent = monthTxns.filter { it.type == TxnType.EXPENSE && it.categoryId == cat.id }
+            val spent = monthTxns.filter { it.type == TxnType.EXPENSE && it.categoryId == cat.id && it.pocketId == null }
                 .sumOf { it.amountMinor }
             Row(
                 Modifier

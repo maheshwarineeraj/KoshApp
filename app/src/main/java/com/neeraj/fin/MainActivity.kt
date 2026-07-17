@@ -69,6 +69,7 @@ import com.neeraj.fin.ui.screens.CategoriesScreen
 import com.neeraj.fin.ui.screens.EditTxnScreen
 import com.neeraj.fin.ui.screens.HomeScreen
 import com.neeraj.fin.ui.screens.InsightsScreen
+import com.neeraj.fin.ui.screens.PocketsScreen
 import com.neeraj.fin.ui.screens.RecurringScreen
 import com.neeraj.fin.ui.screens.ReviewScreen
 import com.neeraj.fin.ui.screens.SettingsScreen
@@ -284,7 +285,7 @@ fun FinNav(vm: AppViewModel = viewModel()) {
                 ) {
             composable("home") { HomeScreen(vm, nav) }
             composable("transactions") { TransactionsScreen(vm, nav) }
-            composable("insights") { InsightsScreen(vm) }
+            composable("insights") { InsightsScreen(vm, nav) }
             composable("wealth") { WealthScreen(vm) }
             composable("settings") { SettingsScreen(vm, nav) }
             composable(
@@ -297,6 +298,7 @@ fun FinNav(vm: AppViewModel = viewModel()) {
             composable("categories") { CategoriesScreen(vm, nav) }
             composable("budgets") { BudgetsScreen(vm, nav) }
             composable("recurring") { RecurringScreen(vm, nav) }
+                    composable("pockets") { PocketsScreen(vm, nav) }
                 }
             }
         }

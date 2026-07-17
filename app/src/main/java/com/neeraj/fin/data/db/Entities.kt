@@ -50,7 +50,8 @@ data class Txn(
     val accountTail: String? = null,
     val smsHash: Long? = null,
     val eventBudgetId: Long? = null, // expense tagged to an event budget (trip, wedding…)
-    val goalId: Long? = null         // income tagged to a savings goal
+    val goalId: Long? = null,        // income tagged to a savings goal
+    val pocketId: Long? = null       // stream bucket; null = the default "Personal" pocket
 )
 
 @Entity(tableName = "pending_sms", indices = [Index(value = ["smsHash"], unique = true)])
@@ -70,7 +71,8 @@ data class PendingSms(
     // the foreign value and the user should correct it to INR when approving.
     val foreignCurrency: String? = null,
     // Purpose text parsed from the message ("For: Gas Cylinder Booking").
-    val note: String = ""
+    val note: String = "",
+    val pocketId: Long? = null
 )
 
 @Entity(tableName = "budgets")
@@ -222,4 +224,21 @@ data class Reminder(
     val lastDoneKey: String? = null,    // "2026-07" monthly · "2026" yearly · "done" once
     val enabled: Boolean = true,
     val source: String = ReminderSource.MANUAL
+)
+
+
+/**
+ * A pocket isolates a stream of money (side business, family, rental) from
+ * the default "Personal" stream. Transactions with pocketId = null belong to
+ * Personal. At most 9 custom pockets (10 including the default).
+ * [accountTails] is a comma-separated list of account/card tails this pocket
+ * claims — detections from those accounts route here automatically.
+ */
+@Entity(tableName = "pockets")
+data class Pocket(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val emoji: String = "👛",
+    val accountTails: String = "",
+    val createdAt: Long = System.currentTimeMillis()
 )

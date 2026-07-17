@@ -12,6 +12,7 @@ import com.neeraj.fin.data.db.GoalContribution
 import com.neeraj.fin.data.db.PendingSms
 import com.neeraj.fin.data.db.PendingStatus
 import com.neeraj.fin.data.db.RecurringRule
+import com.neeraj.fin.data.db.Pocket
 import com.neeraj.fin.data.db.Reminder
 import com.neeraj.fin.data.db.Txn
 import com.neeraj.fin.data.db.TxnSource
@@ -36,6 +37,7 @@ class FinRepository(private val db: AppDatabase) {
     val goalContributions: Flow<List<GoalContribution>> = db.goalDao().contributions()
     val eventBudgets: Flow<List<EventBudget>> = db.eventBudgetDao().all()
     val reminders: Flow<List<Reminder>> = db.reminderDao().all()
+    val pockets: Flow<List<Pocket>> = db.pocketDao().all()
     val recurringRules: Flow<List<RecurringRule>> = db.recurringRuleDao().all()
 
     suspend fun seedDefaultsIfEmpty() {
@@ -143,6 +145,7 @@ class FinRepository(private val db: AppDatabase) {
         if (db.pendingSmsDao().existsSimilar(parsed.amountMinor, parsed.type, timestamp - window, timestamp + window)) return false
         if (db.txnDao().existsSimilarSms(parsed.amountMinor, parsed.type, timestamp - window, timestamp + window)) return false
         val suggested = suggestCategory(parsed)
+        val suggestedPocket = suggestPocket(parsed.accountTail, parsed.merchant)
         val row = PendingSms(
             sender = sender,
             body = body,
@@ -154,7 +157,8 @@ class FinRepository(private val db: AppDatabase) {
             suggestedCategoryId = suggested?.id,
             smsHash = hash,
             foreignCurrency = parsed.foreignCurrency,
-            note = parsed.note
+            note = parsed.note,
+            pocketId = suggestedPocket?.id
         )
         return db.pendingSmsDao().insert(row) != -1L
     }
@@ -193,7 +197,8 @@ class FinRepository(private val db: AppDatabase) {
                 source = TxnSource.SMS,
                 accountTail = item.accountTail,
                 smsHash = item.smsHash,
-                eventBudgetId = if (type == TxnType.EXPENSE) activeEventAt(item.timestamp)?.id else null
+                eventBudgetId = if (type == TxnType.EXPENSE) activeEventAt(item.timestamp)?.id else null,
+                pocketId = item.pocketId
             )
         )
         db.pendingSmsDao().delete(item.id)
@@ -209,6 +214,36 @@ class FinRepository(private val db: AppDatabase) {
             it.startMillis != null && it.endMillis != null &&
                 atMillis >= it.startMillis && atMillis < it.endMillis + 24L * 60 * 60 * 1000
         }
+
+    // ----- Pockets -----
+
+    suspend fun savePocket(pocket: Pocket) = db.pocketDao().upsert(pocket)
+
+    suspend fun deletePocket(id: Long) {
+        db.pocketDao().clearTxnTags(id)
+        db.pocketDao().delete(id)
+    }
+
+    /**
+     * Smart pocket routing: 1) a pocket that claims this account/card tail,
+     * 2) the pocket you last used for this merchant. Null = default Personal.
+     */
+    suspend fun suggestPocket(accountTail: String?, merchant: String): Pocket? {
+        val pockets = db.pocketDao().allOnce()
+        if (pockets.isEmpty()) return null
+        if (!accountTail.isNullOrBlank()) {
+            pockets.firstOrNull { p ->
+                p.accountTails.split(',').map { it.trim() }.any { it.isNotEmpty() && it == accountTail }
+            }?.let { return it }
+        }
+        if (merchant.isNotBlank() && !merchant.equals("unknown", ignoreCase = true)) {
+            val learned = db.txnDao().allOnce().firstOrNull {
+                it.pocketId != null && com.neeraj.fin.util.Merchants.same(it.merchant, merchant)
+            }?.pocketId
+            learned?.let { id -> return pockets.firstOrNull { it.id == id } }
+        }
+        return null
+    }
 
     // ----- Reminders -----
 
@@ -296,7 +331,8 @@ class FinRepository(private val db: AppDatabase) {
         val goalContributions: List<GoalContribution>,
         val eventBudgets: List<EventBudget> = emptyList(),
         val recurringRules: List<RecurringRule> = emptyList(),
-        val reminders: List<Reminder> = emptyList()
+        val reminders: List<Reminder> = emptyList(),
+        val pockets: List<Pocket> = emptyList()
     )
 
     suspend fun snapshot(): Snapshot = Snapshot(
@@ -309,7 +345,8 @@ class FinRepository(private val db: AppDatabase) {
         db.goalDao().contributionsOnce(),
         db.eventBudgetDao().allOnce(),
         db.recurringRuleDao().allOnce(),
-        db.reminderDao().allOnce()
+        db.reminderDao().allOnce(),
+        db.pocketDao().allOnce()
     )
 
     suspend fun replaceAll(data: Snapshot) {
@@ -323,6 +360,7 @@ class FinRepository(private val db: AppDatabase) {
         db.eventBudgetDao().clear()
         db.recurringRuleDao().clear()
         db.reminderDao().clear()
+        db.pocketDao().clear()
         db.categoryDao().insertAll(data.categories)
         db.txnDao().insertAll(data.txns)
         db.budgetDao().insertAll(data.budgets)
@@ -330,6 +368,7 @@ class FinRepository(private val db: AppDatabase) {
         db.assetDao().insertValues(data.assetValues)
         db.goalDao().insertAll(data.goals)
         db.reminderDao().insertAll(data.reminders)
+        db.pocketDao().insertAll(data.pockets)
         db.goalDao().insertContributions(data.goalContributions)
         db.eventBudgetDao().insertAll(data.eventBudgets)
         db.recurringRuleDao().insertAll(data.recurringRules)

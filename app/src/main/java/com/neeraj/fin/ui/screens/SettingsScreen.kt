@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.CurrencyExchange
@@ -154,6 +155,8 @@ fun SettingsScreen(vm: AppViewModel, nav: NavController) {
             SettingRow(Icons.Filled.Repeat, "Recurring", "Rent, SIPs, salary — posted automatically each month") { nav.navigate("recurring") }
             HorizontalDivider()
             SettingRow(Icons.Filled.Category, "Categories", "Create and edit custom categories") { nav.navigate("categories") }
+            HorizontalDivider()
+            SettingRow(Icons.Filled.AccountBalanceWallet, "Pockets", "Isolate money streams — business, family, rental") { nav.navigate("pockets") }
             HorizontalDivider()
             SettingRow(Icons.Filled.CurrencyExchange, "Currency", currency) { showCurrencyDialog = true }
         }

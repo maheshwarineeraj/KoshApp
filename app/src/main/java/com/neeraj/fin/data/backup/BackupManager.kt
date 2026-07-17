@@ -34,7 +34,8 @@ data class BackupTxn(
     val id: Long, val amountMinor: Long, val type: String, val categoryId: Long?,
     val merchant: String, val note: String, val timestamp: Long, val source: String,
     val accountTail: String?, val smsHash: Long?,
-    val eventBudgetId: Long? = null, val goalId: Long? = null
+    val eventBudgetId: Long? = null, val goalId: Long? = null,
+    val pocketId: Long? = null
 )
 
 @Serializable
@@ -72,6 +73,9 @@ data class BackupReminder(
 )
 
 @Serializable
+data class BackupPocket(val id: Long, val name: String, val emoji: String, val accountTails: String, val createdAt: Long)
+
+@Serializable
 data class BackupRecurringRule(
     val id: Long, val amountMinor: Long, val type: String, val categoryId: Long?,
     val merchant: String, val note: String, val dayOfMonth: Int, val startMillis: Long,
@@ -96,7 +100,8 @@ data class BackupData(
     val currencyCode: String? = null,
     val smsAutoCapture: Boolean? = null,
     // v6
-    val reminders: List<BackupReminder> = emptyList()
+    val reminders: List<BackupReminder> = emptyList(),
+    val pockets: List<BackupPocket> = emptyList()
 )
 
 /**
@@ -120,7 +125,7 @@ class BackupManager(
             exportedAtMillis = System.currentTimeMillis(),
             categories = snap.categories.map { BackupCategory(it.id, it.name, it.emoji, it.color, it.kind, it.isDefault) },
             transactions = snap.txns.map {
-                BackupTxn(it.id, it.amountMinor, it.type, it.categoryId, it.merchant, it.note, it.timestamp, it.source, it.accountTail, it.smsHash, it.eventBudgetId, it.goalId)
+                BackupTxn(it.id, it.amountMinor, it.type, it.categoryId, it.merchant, it.note, it.timestamp, it.source, it.accountTail, it.smsHash, it.eventBudgetId, it.goalId, it.pocketId)
             },
             budgets = snap.budgets.map { BackupBudget(it.categoryId, it.monthlyLimitMinor) },
             assets = snap.assets.map { BackupAsset(it.id, it.name, it.type, it.platform, it.isLiability, it.investedMinor, it.notes) },
@@ -137,7 +142,8 @@ class BackupManager(
                 BackupReminder(it.id, it.title, it.amountMinor, it.recurrence, it.dayOfMonth,
                     it.monthOfYear, it.dueMillis, it.merchant, it.categoryId, it.lastDoneKey,
                     it.enabled, it.source)
-            }
+            },
+            pockets = snap.pockets.map { BackupPocket(it.id, it.name, it.emoji, it.accountTails, it.createdAt) },
         )
         val plaintext = json.encodeToString(BackupData.serializer(), data).toByteArray(Charsets.UTF_8)
 
@@ -211,7 +217,7 @@ class BackupManager(
             FinRepository.Snapshot(
                 categories = data.categories.map { Category(it.id, it.name, it.emoji, it.color, it.kind, it.isDefault) },
                 txns = data.transactions.map {
-                    Txn(it.id, it.amountMinor, it.type, it.categoryId, it.merchant, it.note, it.timestamp, it.source, it.accountTail, it.smsHash, it.eventBudgetId, it.goalId)
+                    Txn(it.id, it.amountMinor, it.type, it.categoryId, it.merchant, it.note, it.timestamp, it.source, it.accountTail, it.smsHash, it.eventBudgetId, it.goalId, it.pocketId)
                 },
                 budgets = data.budgets.map { Budget(it.categoryId, it.monthlyLimitMinor) },
                 assets = data.assets.map { Asset(it.id, it.name, it.type, it.platform, it.isLiability, it.investedMinor, it.notes) },
@@ -226,7 +232,10 @@ class BackupManager(
                     com.neeraj.fin.data.db.Reminder(it.id, it.title, it.amountMinor, it.recurrence,
                         it.dayOfMonth, it.monthOfYear, it.dueMillis, it.merchant, it.categoryId,
                         it.lastDoneKey, it.enabled, it.source)
-                }
+                },
+                pockets = data.pockets.map {
+                    com.neeraj.fin.data.db.Pocket(it.id, it.name, it.emoji, it.accountTails, it.createdAt)
+                },
             )
         )
         data.currencyCode?.let { settings.setCurrencyCode(it) }

@@ -42,6 +42,7 @@ import com.neeraj.fin.data.db.TxnType
 import com.neeraj.fin.ui.AppViewModel
 import com.neeraj.fin.ui.components.EmptyState
 import com.neeraj.fin.ui.components.TxnRow
+import com.neeraj.fin.ui.components.inPocket
 import com.neeraj.fin.data.db.Txn
 import com.neeraj.fin.util.Format
 import com.neeraj.fin.util.QueryParser
@@ -50,6 +51,8 @@ import com.neeraj.fin.util.QueryParser
 @Composable
 fun TransactionsScreen(vm: AppViewModel, nav: NavController) {
     val txns by vm.transactions.collectAsState()
+    val pocketsList by vm.pockets.collectAsState()
+    var pocketSel by remember { mutableStateOf(-1L) }
     val categories by vm.categories.collectAsState()
     val currency by vm.currencyCode.collectAsState()
     val pendingCount by vm.pendingCount.collectAsState()
@@ -63,7 +66,8 @@ fun TransactionsScreen(vm: AppViewModel, nav: NavController) {
     val parsed = remember(query) { if (query.isBlank()) null else QueryParser.parse(query) }
     val synonyms by vm.searchSynonyms.collectAsState()
     val chipFiltered = txns.filter { t ->
-        (typeFilter == null || t.type == typeFilter) &&
+        t.inPocket(pocketSel) &&
+            (typeFilter == null || t.type == typeFilter) &&
             (categoryFilter == null || t.categoryId == categoryFilter)
     }
     // Score text terms: prefer transactions matching every word; if none do,
@@ -135,6 +139,7 @@ fun TransactionsScreen(vm: AppViewModel, nav: NavController) {
                 )
             }
 
+            com.neeraj.fin.ui.components.PocketFilterRow(pocketsList, pocketSel, { pocketSel = it })
             Row(
                 Modifier
                     .fillMaxWidth()

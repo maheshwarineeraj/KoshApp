@@ -47,6 +47,7 @@ import androidx.navigation.NavController
 import com.neeraj.fin.data.db.TxnType
 import com.neeraj.fin.ui.AppViewModel
 import com.neeraj.fin.ui.components.EmptyState
+import com.neeraj.fin.ui.components.inPocket
 import com.neeraj.fin.ui.components.ProgressBar
 import com.neeraj.fin.ui.components.TxnRow
 import com.neeraj.fin.ui.theme.expenseColor
@@ -62,7 +63,10 @@ import java.time.temporal.ChronoUnit
 
 @Composable
 fun HomeScreen(vm: AppViewModel, nav: NavController) {
-    val txns by vm.transactions.collectAsState()
+    val allTxns by vm.transactions.collectAsState()
+    val pocketsList by vm.pockets.collectAsState()
+    var pocketSel by remember { mutableStateOf(-1L) }
+    val txns = allTxns.filter { it.inPocket(pocketSel) }
     val categories by vm.categories.collectAsState()
     val budgets by vm.budgets.collectAsState()
     val pendingCount by vm.pendingCount.collectAsState()
@@ -96,6 +100,10 @@ fun HomeScreen(vm: AppViewModel, nav: NavController) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+            }
+
+            item {
+                com.neeraj.fin.ui.components.PocketFilterRow(pocketsList, pocketSel, { pocketSel = it })
             }
 
             item {
@@ -191,7 +199,8 @@ fun HomeScreen(vm: AppViewModel, nav: NavController) {
             // Budget snapshot: top 3 budgets by usage
             val budgetRows = budgets.mapNotNull { b ->
                 val cat = catById[b.categoryId] ?: return@mapNotNull null
-                val spent = monthTxns.filter { it.type == TxnType.EXPENSE && it.categoryId == b.categoryId }
+                // Budgets track the Personal (default) pocket only.
+                val spent = monthTxns.filter { it.type == TxnType.EXPENSE && it.categoryId == b.categoryId && it.pocketId == null }
                     .sumOf { it.amountMinor }
                 Triple(cat, spent, b.monthlyLimitMinor)
             }.sortedByDescending { it.second.toDouble() / it.third }.take(3)

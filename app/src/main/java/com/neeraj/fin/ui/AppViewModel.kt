@@ -198,6 +198,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun setNotificationCapture(enabled: Boolean) =
         viewModelScope.launch { app.settings.setNotificationCapture(enabled) }
 
+    val pockets: StateFlow<List<com.neeraj.fin.data.db.Pocket>> =
+        repo.pockets.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun savePocket(pocket: com.neeraj.fin.data.db.Pocket) = viewModelScope.launch {
+        repo.savePocket(pocket); toast("Pocket saved")
+    }
+
+    fun deletePocket(id: Long) = viewModelScope.launch {
+        repo.deletePocket(id); toast("Pocket removed — its transactions moved to Personal")
+    }
+
     val searchSynonyms: StateFlow<Set<String>> =
         app.settings.searchSynonyms.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
