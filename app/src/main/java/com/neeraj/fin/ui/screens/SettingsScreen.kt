@@ -59,7 +59,7 @@ import java.time.LocalDate
 private val currencies = listOf("INR", "USD", "EUR", "GBP", "AED", "SGD", "AUD", "CAD", "JPY")
 
 @Composable
-fun SettingsScreen(vm: AppViewModel, nav: NavController) {
+fun SettingsScreen(vm: AppViewModel, nav: NavController, page: String = "more") {
     val context = LocalContext.current
     val currency by vm.currencyCode.collectAsState()
     val autoCapture by vm.smsAutoCapture.collectAsState()
@@ -147,9 +147,12 @@ fun SettingsScreen(vm: AppViewModel, nav: NavController) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("More", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Text(
+            when (page) { "prefs" -> "Settings"; "backup" -> "Backup & export"; else -> "More" },
+            style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold
+        )
 
-        SectionCard("Organize") {
+        if (page == "more") SectionCard("Organize") {
             SettingRow(Icons.Filled.Savings, "Budgets & Goals", "Monthly limits, event budgets, savings goals") { nav.navigate("budgets") }
             HorizontalDivider()
             SettingRow(Icons.Filled.Repeat, "Recurring", "Rent, SIPs, salary — posted automatically each month") { nav.navigate("recurring") }
@@ -161,7 +164,7 @@ fun SettingsScreen(vm: AppViewModel, nav: NavController) {
             SettingRow(Icons.Filled.CurrencyExchange, "Currency", currency) { showCurrencyDialog = true }
         }
 
-        SectionCard("Security & alerts") {
+        if (page == "prefs") SectionCard("Security & alerts") {
             Row(
                 Modifier.fillMaxWidth().padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -216,7 +219,7 @@ fun SettingsScreen(vm: AppViewModel, nav: NavController) {
             }
         }
 
-        SectionCard("SMS capture") {
+        if (page == "prefs") SectionCard("SMS capture") {
             SettingRow(
                 Icons.Filled.Sms,
                 "SMS permission",
@@ -258,7 +261,7 @@ fun SettingsScreen(vm: AppViewModel, nav: NavController) {
             }
         }
 
-        SectionCard("Notification capture") {
+        if (page == "prefs") SectionCard("Notification capture") {
             SettingRow(
                 Icons.Filled.Notifications,
                 "Notification access",
@@ -297,7 +300,13 @@ fun SettingsScreen(vm: AppViewModel, nav: NavController) {
             }
         }
 
-        SectionCard("Backup & export") {
+        if (page == "more") SectionCard("Shortcuts") {
+            SettingRow(Icons.Filled.Lock, "Settings", "App lock, screenshots, alerts, SMS & notification capture") { nav.navigate("appsettings") }
+            HorizontalDivider()
+            SettingRow(Icons.Filled.CloudUpload, "Backup & export", "Encrypted backups, auto backup, CSV import/export") { nav.navigate("backup") }
+        }
+
+        if (page == "backup") SectionCard("Backup & export") {
             SettingRow(
                 Icons.Filled.CloudUpload,
                 "Encrypted backup",
@@ -337,7 +346,7 @@ fun SettingsScreen(vm: AppViewModel, nav: NavController) {
             ) { importHoldingsCsvLauncher.launch(arrayOf("*/*")) }
         }
 
-        Card {
+        if (page == "more") Card {
             Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 Text(

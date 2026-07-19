@@ -171,6 +171,8 @@ private fun PendingCard(
     var categoryId by remember(item.id) { mutableStateOf(item.suggestedCategoryId) }
     var merchant by remember(item.id) { mutableStateOf(item.merchant) }
     var noteText by remember(item.id) { mutableStateOf(item.note) }
+    var pocketSel by remember(item.id) { mutableStateOf(item.pocketId) }
+    val pocketsList by vm.pockets.collectAsState()
     var expanded by remember(item.id) { mutableStateOf(false) }
 
     val amountMinor = Format.parseAmount(amountText)
@@ -241,7 +243,7 @@ private fun PendingCard(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = {
-                            vm.approvePending(item, item.amountMinor, type, categoryId, merchant.trim(), noteText.trim())
+                            vm.approvePending(item.copy(pocketId = pocketSel), item.amountMinor, type, categoryId, merchant.trim(), noteText.trim())
                         },
                         modifier = Modifier.weight(1f)
                     ) { Text("Approve", maxLines = 1, softWrap = false) }
@@ -298,6 +300,22 @@ private fun PendingCard(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+                if (pocketsList.isNotEmpty()) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = pocketSel == null,
+                            onClick = { pocketSel = null },
+                            label = { Text("👤 Personal") }
+                        )
+                        pocketsList.forEach { pk ->
+                            FilterChip(
+                                selected = pocketSel == pk.id,
+                                onClick = { pocketSel = pk.id },
+                                label = { Text("${pk.emoji} ${pk.name}") }
+                            )
+                        }
+                    }
+                }
                 val txnsAll by vm.transactions.collectAsState()
                 var showCatPicker by remember { mutableStateOf(false) }
                 val chips = remember(merchant, noteText, type, categoryId, categories, txnsAll) {
@@ -343,7 +361,7 @@ private fun PendingCard(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = {
-                            vm.approvePending(item, amountMinor!!, type, categoryId, merchant.trim(), noteText.trim())
+                            vm.approvePending(item.copy(pocketId = pocketSel), amountMinor!!, type, categoryId, merchant.trim(), noteText.trim())
                         },
                         enabled = amountMinor != null,
                         modifier = Modifier.weight(1f),

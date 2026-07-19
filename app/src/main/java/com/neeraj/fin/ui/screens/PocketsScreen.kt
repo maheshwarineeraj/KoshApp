@@ -151,17 +151,21 @@ private fun PocketDialog(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = emoji, onValueChange = { emoji = it.take(4) },
-                        label = { Text("Emoji") }, modifier = Modifier.padding(end = 4.dp).fillMaxWidth(0.3f)
+                        label = { Text("Emoji", maxLines = 1) }, singleLine = true,
+                        modifier = Modifier.weight(0.3f)
                     )
                     OutlinedTextField(
                         value = name, onValueChange = { name = it },
-                        label = { Text("Name (e.g. Business)") }, singleLine = true
+                        label = { Text("Name", maxLines = 1) },
+                        placeholder = { Text("Business", maxLines = 1) },
+                        singleLine = true,
+                        modifier = Modifier.weight(0.7f)
                     )
                 }
                 OutlinedTextField(
                     value = tails, onValueChange = { tails = it },
                     label = { Text("Account tails (optional)") },
-                    supportingText = { Text("Comma-separated, e.g. 5740, 8694 — SMS detections from those accounts route here automatically.") },
+                    supportingText = { Text("e.g. 5740, 8694 — detections from those accounts route here", style = MaterialTheme.typography.labelSmall) },
                     singleLine = true, modifier = Modifier.fillMaxWidth()
                 )
             }

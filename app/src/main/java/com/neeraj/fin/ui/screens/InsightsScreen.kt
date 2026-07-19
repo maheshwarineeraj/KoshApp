@@ -79,7 +79,7 @@ private fun OverviewTab(vm: AppViewModel, nav: androidx.navigation.NavController
     var breakdownType by remember { mutableStateOf(TxnType.EXPENSE) }
 
     val pocketsList by vm.pockets.collectAsState()
-    var pocketSel by remember { mutableStateOf(-1L) }
+    var pocketSel by remember { mutableStateOf(0L) }  // default: Personal
     var drill by remember { mutableStateOf<Pair<String, List<Txn>>?>(null) }
 
     val range = remember(kind, anchor) { Periods.rangeFor(kind, anchor) }

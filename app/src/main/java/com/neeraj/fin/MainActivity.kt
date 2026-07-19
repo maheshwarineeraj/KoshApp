@@ -299,6 +299,8 @@ fun FinNav(vm: AppViewModel = viewModel()) {
             composable("budgets") { BudgetsScreen(vm, nav) }
             composable("recurring") { RecurringScreen(vm, nav) }
                     composable("pockets") { PocketsScreen(vm, nav) }
+                    composable("appsettings") { SettingsScreen(vm, nav, "prefs") }
+                    composable("backup") { SettingsScreen(vm, nav, "backup") }
                 }
             }
         }

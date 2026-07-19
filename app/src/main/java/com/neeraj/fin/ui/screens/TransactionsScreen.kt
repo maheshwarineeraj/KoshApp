@@ -52,7 +52,7 @@ import com.neeraj.fin.util.QueryParser
 fun TransactionsScreen(vm: AppViewModel, nav: NavController) {
     val txns by vm.transactions.collectAsState()
     val pocketsList by vm.pockets.collectAsState()
-    var pocketSel by remember { mutableStateOf(-1L) }
+    var pocketSel by remember { mutableStateOf(0L) }  // default: Personal
     val categories by vm.categories.collectAsState()
     val currency by vm.currencyCode.collectAsState()
     val pendingCount by vm.pendingCount.collectAsState()
@@ -125,7 +125,14 @@ fun TransactionsScreen(vm: AppViewModel, nav: NavController) {
                 value = query,
                 onValueChange = { query = it },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                placeholder = { Text("Try: advance tax 20K in Q2 last year") },
+                placeholder = {
+                    Text(
+                        "Search — try: tax 20K Q2 last year",
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                },
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                 singleLine = true
             )

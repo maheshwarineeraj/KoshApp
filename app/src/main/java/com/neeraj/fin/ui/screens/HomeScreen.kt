@@ -65,7 +65,7 @@ import java.time.temporal.ChronoUnit
 fun HomeScreen(vm: AppViewModel, nav: NavController) {
     val allTxns by vm.transactions.collectAsState()
     val pocketsList by vm.pockets.collectAsState()
-    var pocketSel by remember { mutableStateOf(-1L) }
+    var pocketSel by remember { mutableStateOf(0L) }  // default: Personal
     val txns = allTxns.filter { it.inPocket(pocketSel) }
     val categories by vm.categories.collectAsState()
     val budgets by vm.budgets.collectAsState()
