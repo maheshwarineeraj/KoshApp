@@ -48,7 +48,7 @@ class TxnNotificationListener : NotificationListenerService() {
             } else {
                 BillDueParser.parse(sender, text)?.let { bill ->
                     com.neeraj.fin.util.BillDueExtractor.dueDateMillis(text)?.let { due ->
-                        app.repository.offerBillDueReminder(bill.title, bill.amountMinor, due)
+                        app.repository.offerBillDueReminder(bill.title, bill.amountMinor, due, bill.dueDayHint)
                     }
                 }
             }

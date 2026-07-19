@@ -249,10 +249,13 @@ object SmsParser {
 data class BillDue(val title: String, val amountMinor: Long, val dueDayHint: String)
 
 object BillDueParser {
-    private val duePhrase = Regex("""(?:is due|due on|due by|pay by|before)""", RegexOption.IGNORE_CASE)
+    private val duePhrase = Regex(
+        """(?:is due|due on|due by|due date|pay by|payable by|last date|will be debited|autopay|e-mandate|mandate|renew(?:al)? (?:by|on|due))""",
+        RegexOption.IGNORE_CASE
+    )
     private val amount = Regex("""(?:rs\.?|inr|₹)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)""", RegexOption.IGNORE_CASE)
     private val biller = Regex(
-        """(electricity|power|water|gas|broadband|internet|mobile|postpaid|dth|credit card|card|insurance|premium|emi|loan|rent|maintenance|bill)""",
+        """(electricity|power|water|gas|broadband|internet|mobile|postpaid|prepaid|recharge|dth|credit card|card|insurance|premium|emi|loan|rent|maintenance|subscription|membership|fee|fastag|society|school|tax|bill)""",
         RegexOption.IGNORE_CASE
     )
 
@@ -267,9 +270,15 @@ object BillDueParser {
         if (!duePhrase.containsMatchIn(body)) return null
         val amt = amount.find(body)?.groupValues?.get(1)?.replace(",", "")?.toDoubleOrNull() ?: return null
         if (amt <= 0) return null
+        // Any due-phrase + amount is a payment reminder even without a known
+        // biller keyword; fall back to a generic title with the sender.
         val what = biller.find(body)?.groupValues?.get(1)
-            ?.lowercase()?.replaceFirstChar { it.uppercase() } ?: return null
-        val title = if (what.equals("bill", true)) "Bill payment" else "$what bill"
+            ?.lowercase()?.replaceFirstChar { it.uppercase() }
+        val title = when {
+            what == null -> "Payment due (${sender.takeLast(8)})"
+            what.equals("bill", true) -> "Bill payment"
+            else -> "$what payment"
+        }
         return BillDue(title, (amt * 100).toLong(), body)
     }
 }

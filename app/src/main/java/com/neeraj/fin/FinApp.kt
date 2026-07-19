@@ -41,6 +41,7 @@ class FinApp : Application() {
         appScope.launch {
             repository.seedDefaultsIfEmpty()
             repository.applyDueRecurringRules()
+            runCatching { Notifications.reminderNudge(this@FinApp) }
             backupManager.autoBackupIfDue()
             updateKoshWidget(this@FinApp)
         }

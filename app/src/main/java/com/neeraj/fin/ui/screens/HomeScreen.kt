@@ -70,6 +70,7 @@ fun HomeScreen(vm: AppViewModel, nav: NavController) {
     val categories by vm.categories.collectAsState()
     val budgets by vm.budgets.collectAsState()
     val pendingCount by vm.pendingCount.collectAsState()
+    val remindersAll by vm.reminders.collectAsState()
     val currency by vm.currencyCode.collectAsState()
 
     // Current month only — used for the budgets snapshot below
@@ -165,7 +166,7 @@ fun HomeScreen(vm: AppViewModel, nav: NavController) {
                         .padding(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    QuickAction("🎯", "Goals") { nav.navigate("budgets") }
+                    QuickAction("🎯", "Goals") { nav.navigate("goals") }
                     QuickAction("💼", "Wealth") { nav.navigate("wealth") }
                     QuickAction("🏷️", "Categories") { nav.navigate("categories") }
                     QuickAction("📊", "Insights") { nav.navigate("insights") }
@@ -253,6 +254,41 @@ fun HomeScreen(vm: AppViewModel, nav: NavController) {
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(horizontal = 20.dp)
                     )
+                }
+            }
+
+            item {
+                // Payment reminders needing attention: due now, or suggested and unreviewed.
+                val today = remember { LocalDate.now() }
+                val dueCount = remindersAll.count { it.enabled && com.neeraj.fin.notify.Notifications.isDue(it, today) }
+                val suggestedCount = remindersAll.count { !it.enabled }
+                if (dueCount + suggestedCount > 0) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .clickable { nav.navigate("reminders") },
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("⏰", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                buildString {
+                                    if (dueCount > 0) append("$dueCount payment${if (dueCount == 1) "" else "s"} due")
+                                    if (dueCount > 0 && suggestedCount > 0) append(" · ")
+                                    if (suggestedCount > 0) append("$suggestedCount reminder suggestion${if (suggestedCount == 1) "" else "s"}")
+                                    append(" — tap to review")
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.weight(1f).padding(horizontal = 12.dp)
+                            )
+                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
+                        }
+                    }
                 }
             }
 

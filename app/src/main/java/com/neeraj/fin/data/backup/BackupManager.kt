@@ -69,7 +69,8 @@ data class BackupEventBudget(
 data class BackupReminder(
     val id: Long, val title: String, val amountMinor: Long, val recurrence: String,
     val dayOfMonth: Int, val monthOfYear: Int, val dueMillis: Long?, val merchant: String,
-    val categoryId: Long?, val lastDoneKey: String?, val enabled: Boolean, val source: String
+    val categoryId: Long?, val lastDoneKey: String?, val enabled: Boolean, val source: String,
+    val sourceBody: String = ""
 )
 
 @Serializable
@@ -141,7 +142,7 @@ class BackupManager(
             reminders = snap.reminders.map {
                 BackupReminder(it.id, it.title, it.amountMinor, it.recurrence, it.dayOfMonth,
                     it.monthOfYear, it.dueMillis, it.merchant, it.categoryId, it.lastDoneKey,
-                    it.enabled, it.source)
+                    it.enabled, it.source, it.sourceBody)
             },
             pockets = snap.pockets.map { BackupPocket(it.id, it.name, it.emoji, it.accountTails, it.createdAt) },
         )
@@ -231,7 +232,7 @@ class BackupManager(
                 reminders = data.reminders.map {
                     com.neeraj.fin.data.db.Reminder(it.id, it.title, it.amountMinor, it.recurrence,
                         it.dayOfMonth, it.monthOfYear, it.dueMillis, it.merchant, it.categoryId,
-                        it.lastDoneKey, it.enabled, it.source)
+                        it.lastDoneKey, it.enabled, it.source, it.sourceBody)
                 },
                 pockets = data.pockets.map {
                     com.neeraj.fin.data.db.Pocket(it.id, it.name, it.emoji, it.accountTails, it.createdAt)

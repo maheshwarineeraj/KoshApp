@@ -69,7 +69,7 @@ import java.time.temporal.ChronoUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BudgetsScreen(vm: AppViewModel, nav: NavController) {
+fun BudgetsScreen(vm: AppViewModel, nav: NavController, page: String = "budgets") {
     var tab by remember { mutableStateOf(0) }
     var creatingGoal by remember { mutableStateOf(false) }
     var creatingEvent by remember { mutableStateOf(false) }
@@ -77,7 +77,9 @@ fun BudgetsScreen(vm: AppViewModel, nav: NavController) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Budgets & Goals") },
+                title = {
+                    Text(when (page) { "goals" -> "Goals"; "reminders" -> "Reminders"; else -> "Budgets" })
+                },
                 navigationIcon = {
                     IconButton(onClick = { nav.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -86,28 +88,31 @@ fun BudgetsScreen(vm: AppViewModel, nav: NavController) {
             )
         },
         floatingActionButton = {
-            when (tab) {
-                1 -> FloatingActionButton(onClick = { creatingEvent = true }) {
-                    Icon(Icons.Filled.Add, contentDescription = "Add event budget")
-                }
-                2 -> FloatingActionButton(onClick = { creatingGoal = true }) {
+            when {
+                page == "goals" -> FloatingActionButton(onClick = { creatingGoal = true }) {
                     Icon(Icons.Filled.Add, contentDescription = "Add goal")
                 }
+                page == "budgets" && tab == 1 -> FloatingActionButton(onClick = { creatingEvent = true }) {
+                    Icon(Icons.Filled.Add, contentDescription = "Add event budget")
+                }
+                else -> {}
             }
         }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            TabRow(selectedTabIndex = tab) {
-                Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Monthly") })
-                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Events") })
-                Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("Goals") })
-                Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("Remind") })
-            }
-            when (tab) {
-                0 -> CategoryBudgetsTab(vm)
-                1 -> EventBudgetsTab(vm, creatingEvent, onDialogHandled = { creatingEvent = false })
-                2 -> GoalsTab(vm, creatingGoal, onDialogHandled = { creatingGoal = false })
-                else -> RemindersTab(vm)
+            when (page) {
+                "goals" -> GoalsTab(vm, creatingGoal, onDialogHandled = { creatingGoal = false })
+                "reminders" -> RemindersTab(vm)
+                else -> {
+                    TabRow(selectedTabIndex = tab) {
+                        Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Monthly") })
+                        Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Events") })
+                    }
+                    when (tab) {
+                        0 -> CategoryBudgetsTab(vm)
+                        else -> EventBudgetsTab(vm, creatingEvent, onDialogHandled = { creatingEvent = false })
+                    }
+                }
             }
         }
     }

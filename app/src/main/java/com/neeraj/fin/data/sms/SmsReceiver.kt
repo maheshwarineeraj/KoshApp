@@ -37,7 +37,7 @@ class SmsReceiver : BroadcastReceiver() {
                     } else {
                         BillDueParser.parse(sender, body)?.let { bill ->
                             com.neeraj.fin.util.BillDueExtractor.dueDateMillis(body)?.let { due ->
-                                app.repository.offerBillDueReminder(bill.title, bill.amountMinor, due)
+                                app.repository.offerBillDueReminder(bill.title, bill.amountMinor, due, bill.dueDayHint)
                             }
                         }
                     }

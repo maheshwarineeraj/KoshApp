@@ -1,5 +1,6 @@
 package com.neeraj.fin.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -102,6 +103,18 @@ fun RemindersTab(vm: AppViewModel) {
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        if (r.sourceBody.isNotBlank()) {
+                            var showFull by remember(r.id) { mutableStateOf(false) }
+                            Text(
+                                "“${r.sourceBody}”",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = if (showFull) Int.MAX_VALUE else 2,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                modifier = Modifier.fillMaxWidth()
+                                    .clickable { showFull = !showFull }
+                            )
+                        }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(onClick = { vm.saveReminder(r.copy(enabled = true)) }, modifier = Modifier.weight(1f)) { Text("Add") }
                             OutlinedButton(onClick = { vm.deleteReminder(r.id) }, modifier = Modifier.weight(1f)) { Text("Dismiss") }
@@ -189,6 +202,18 @@ fun RemindersTab(vm: AppViewModel) {
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        if (r.sourceBody.isNotBlank()) {
+                            var showFull by remember(r.id) { mutableStateOf(false) }
+                            Text(
+                                "“${r.sourceBody}”",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = if (showFull) Int.MAX_VALUE else 2,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                modifier = Modifier.fillMaxWidth()
+                                    .clickable { showFull = !showFull }
+                            )
+                        }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (due) {
                                 Button(onClick = { vm.markReminderDone(r) }, modifier = Modifier.weight(1f)) { Text("Mark done") }

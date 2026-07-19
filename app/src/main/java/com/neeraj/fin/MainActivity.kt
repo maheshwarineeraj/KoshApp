@@ -81,6 +81,11 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 class MainActivity : FragmentActivity() {
+
+    private val notifPermission = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -117,6 +122,17 @@ class MainActivity : FragmentActivity() {
                         onExit = { finish() }
                     )
                     else -> Box {
+                        // Notifications are on by default — make sure Android 13+
+                        // actually lets us post them.
+                        LaunchedEffect(Unit) {
+                            if (android.os.Build.VERSION.SDK_INT >= 33 &&
+                                ContextCompat.checkSelfPermission(
+                                    this@MainActivity, android.Manifest.permission.POST_NOTIFICATIONS
+                                ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                            ) {
+                                notifPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                            }
+                        }
                         FinNav()
                         // Overlay (not replacement) so the navigation stack and any
                         // half-filled form survive the lock/unlock round-trip.
@@ -300,6 +316,8 @@ fun FinNav(vm: AppViewModel = viewModel()) {
             composable("recurring") { RecurringScreen(vm, nav) }
                     composable("pockets") { PocketsScreen(vm, nav) }
                     composable("appsettings") { SettingsScreen(vm, nav, "prefs") }
+                    composable("goals") { BudgetsScreen(vm, nav, "goals") }
+                    composable("reminders") { BudgetsScreen(vm, nav, "reminders") }
                     composable("backup") { SettingsScreen(vm, nav, "backup") }
                 }
             }

@@ -257,7 +257,7 @@ class FinRepository(private val db: AppDatabase) {
      * Queue a bill-due suggestion (from an SMS like "electricity bill of
      * Rs 1,240 due on 25-07"). Deduped on title + due month.
      */
-    suspend fun offerBillDueReminder(title: String, amountMinor: Long, dueMillis: Long): Boolean {
+    suspend fun offerBillDueReminder(title: String, amountMinor: Long, dueMillis: Long, sourceBody: String = ""): Boolean {
         val dueKey = com.neeraj.fin.util.Format.toLocalDate(dueMillis).withDayOfMonth(1)
         val exists = db.reminderDao().allOnce().any { r ->
             r.title.equals(title, ignoreCase = true) && r.dueMillis != null &&
@@ -269,7 +269,8 @@ class FinRepository(private val db: AppDatabase) {
                 title = title, amountMinor = amountMinor,
                 recurrence = com.neeraj.fin.data.db.ReminderRecurrence.ONCE,
                 dueMillis = dueMillis, enabled = false,
-                source = com.neeraj.fin.data.db.ReminderSource.SMS
+                source = com.neeraj.fin.data.db.ReminderSource.SMS,
+                sourceBody = sourceBody
             )
         )
         return true

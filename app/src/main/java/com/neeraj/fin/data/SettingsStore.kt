@@ -33,7 +33,7 @@ class SettingsStore(private val context: Context) {
     val currencyCode: Flow<String> = context.dataStore.data.map { it[currencyKey] ?: "INR" }
     val smsAutoCapture: Flow<Boolean> = context.dataStore.data.map { it[autoCaptureKey] ?: true }
     val appLock: Flow<Boolean> = context.dataStore.data.map { it[appLockKey] ?: false }
-    val notificationsEnabled: Flow<Boolean> = context.dataStore.data.map { it[notificationsKey] ?: false }
+    val notificationsEnabled: Flow<Boolean> = context.dataStore.data.map { it[notificationsKey] ?: true }
     val privacyAccepted: Flow<Boolean> = context.dataStore.data.map { it[privacyAcceptedKey] ?: false }
     val blockScreenshots: Flow<Boolean> = context.dataStore.data.map { it[blockScreenshotsKey] ?: true }
     val notificationCapture: Flow<Boolean> = context.dataStore.data.map { it[notifCaptureKey] ?: false }

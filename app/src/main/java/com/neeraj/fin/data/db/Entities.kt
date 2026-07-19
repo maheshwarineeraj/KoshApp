@@ -223,7 +223,9 @@ data class Reminder(
     val categoryId: Long? = null,
     val lastDoneKey: String? = null,    // "2026-07" monthly · "2026" yearly · "done" once
     val enabled: Boolean = true,
-    val source: String = ReminderSource.MANUAL
+    val source: String = ReminderSource.MANUAL,
+    // Full original message for SMS-suggested reminders, so the user can verify.
+    val sourceBody: String = ""
 )
 
 

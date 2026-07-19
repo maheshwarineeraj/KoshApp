@@ -153,7 +153,11 @@ fun SettingsScreen(vm: AppViewModel, nav: NavController, page: String = "more") 
         )
 
         if (page == "more") SectionCard("Organize") {
-            SettingRow(Icons.Filled.Savings, "Budgets & Goals", "Monthly limits, event budgets, savings goals") { nav.navigate("budgets") }
+            SettingRow(Icons.Filled.Savings, "Budgets", "Monthly limits and event budgets") { nav.navigate("budgets") }
+            HorizontalDivider()
+            SettingRow(Icons.Filled.Savings, "Goals", "Savings targets and contributions") { nav.navigate("goals") }
+            HorizontalDivider()
+            SettingRow(Icons.Filled.Notifications, "Reminders", "Payments you must make — rent, SIPs, bills") { nav.navigate("reminders") }
             HorizontalDivider()
             SettingRow(Icons.Filled.Repeat, "Recurring", "Rent, SIPs, salary — posted automatically each month") { nav.navigate("recurring") }
             HorizontalDivider()
