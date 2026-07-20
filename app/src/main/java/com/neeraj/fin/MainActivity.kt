@@ -315,6 +315,7 @@ fun FinNav(vm: AppViewModel = viewModel()) {
             composable("budgets") { BudgetsScreen(vm, nav) }
             composable("recurring") { RecurringScreen(vm, nav) }
                     composable("pockets") { PocketsScreen(vm, nav) }
+                    composable("cards") { com.neeraj.fin.ui.screens.CardsScreen(vm, nav) }
                     composable("appsettings") { SettingsScreen(vm, nav, "prefs") }
                     composable("goals") { BudgetsScreen(vm, nav, "goals") }
                     composable("reminders") { BudgetsScreen(vm, nav, "reminders") }

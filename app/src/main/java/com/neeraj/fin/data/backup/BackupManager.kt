@@ -77,6 +77,13 @@ data class BackupReminder(
 data class BackupPocket(val id: Long, val name: String, val emoji: String, val accountTails: String, val createdAt: Long)
 
 @Serializable
+data class BackupCard(
+    val id: Long, val bankName: String, val holderName: String, val number: String,
+    val cvv: String, val expiryMonth: Int, val expiryYear: Int, val network: String,
+    val colorIndex: Int, val createdAt: Long
+)
+
+@Serializable
 data class BackupRecurringRule(
     val id: Long, val amountMinor: Long, val type: String, val categoryId: Long?,
     val merchant: String, val note: String, val dayOfMonth: Int, val startMillis: Long,
@@ -102,7 +109,10 @@ data class BackupData(
     val smsAutoCapture: Boolean? = null,
     // v6
     val reminders: List<BackupReminder> = emptyList(),
-    val pockets: List<BackupPocket> = emptyList()
+    val pockets: List<BackupPocket> = emptyList(),
+    // Card numbers/CVVs travel decrypted INSIDE this passphrase-encrypted file
+    // (device Keystore blobs would not survive a device change).
+    val cards: List<BackupCard> = emptyList()
 )
 
 /**
@@ -145,6 +155,14 @@ class BackupManager(
                     it.enabled, it.source, it.sourceBody)
             },
             pockets = snap.pockets.map { BackupPocket(it.id, it.name, it.emoji, it.accountTails, it.createdAt) },
+            cards = snap.cards.map {
+                BackupCard(
+                    it.id, it.bankName, it.holderName,
+                    com.neeraj.fin.util.CardCrypto.decrypt(it.encNumber),
+                    com.neeraj.fin.util.CardCrypto.decrypt(it.encCvv),
+                    it.expiryMonth, it.expiryYear, it.network, it.colorIndex, it.createdAt
+                )
+            },
         )
         val plaintext = json.encodeToString(BackupData.serializer(), data).toByteArray(Charsets.UTF_8)
 
@@ -236,6 +254,17 @@ class BackupManager(
                 },
                 pockets = data.pockets.map {
                     com.neeraj.fin.data.db.Pocket(it.id, it.name, it.emoji, it.accountTails, it.createdAt)
+                },
+                cards = data.cards.map {
+                    com.neeraj.fin.data.db.CreditCard(
+                        id = it.id, bankName = it.bankName, holderName = it.holderName,
+                        last4 = it.number.filter { c -> c.isDigit() }.takeLast(4),
+                        network = it.network,
+                        encNumber = com.neeraj.fin.util.CardCrypto.encrypt(it.number),
+                        encCvv = com.neeraj.fin.util.CardCrypto.encrypt(it.cvv),
+                        expiryMonth = it.expiryMonth, expiryYear = it.expiryYear,
+                        colorIndex = it.colorIndex, createdAt = it.createdAt
+                    )
                 },
             )
         )

@@ -309,3 +309,25 @@ interface PocketDao {
     @Query("DELETE FROM pockets")
     suspend fun clear()
 }
+
+
+@Dao
+interface CardDao {
+    @Query("SELECT * FROM cards ORDER BY createdAt")
+    fun all(): Flow<List<CreditCard>>
+
+    @Query("SELECT * FROM cards")
+    suspend fun allOnce(): List<CreditCard>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(card: CreditCard): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(cards: List<CreditCard>)
+
+    @Query("DELETE FROM cards WHERE id = :id")
+    suspend fun delete(id: Long)
+
+    @Query("DELETE FROM cards")
+    suspend fun clear()
+}

@@ -165,6 +165,8 @@ fun SettingsScreen(vm: AppViewModel, nav: NavController, page: String = "more") 
             HorizontalDivider()
             SettingRow(Icons.Filled.AccountBalanceWallet, "Pockets", "Isolate money streams — business, family, rental") { nav.navigate("pockets") }
             HorizontalDivider()
+            SettingRow(Icons.Filled.Lock, "Cards", "Encrypted card vault — reveal with fingerprint") { nav.navigate("cards") }
+            HorizontalDivider()
             SettingRow(Icons.Filled.CurrencyExchange, "Currency", currency) { showCurrencyDialog = true }
         }
 

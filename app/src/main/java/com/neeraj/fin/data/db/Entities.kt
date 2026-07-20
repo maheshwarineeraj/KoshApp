@@ -244,3 +244,25 @@ data class Pocket(
     val accountTails: String = "",
     val createdAt: Long = System.currentTimeMillis()
 )
+
+
+/**
+ * A stored credit/debit card. The full number and CVV are AES-GCM encrypted
+ * with a hardware-backed Keystore key (see CardCrypto); only the last four
+ * digits are kept readable for display. Revealing decrypted values is gated
+ * by biometrics in the UI.
+ */
+@Entity(tableName = "cards")
+data class CreditCard(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val bankName: String,
+    val holderName: String = "",
+    val last4: String,
+    val network: String = "Card",
+    val encNumber: String,           // CardCrypto blob
+    val encCvv: String = "",         // CardCrypto blob
+    val expiryMonth: Int = 0,        // 0 = not set
+    val expiryYear: Int = 0,
+    val colorIndex: Int = 0,         // palette index for the card face
+    val createdAt: Long = System.currentTimeMillis()
+)

@@ -209,6 +209,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         repo.deletePocket(id); toast("Pocket removed — its transactions moved to Personal")
     }
 
+    val cards: StateFlow<List<com.neeraj.fin.data.db.CreditCard>> =
+        repo.cards.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun saveCard(card: com.neeraj.fin.data.db.CreditCard) = viewModelScope.launch {
+        repo.saveCard(card); toast("Card saved")
+    }
+
+    fun deleteCard(id: Long) = viewModelScope.launch {
+        repo.deleteCard(id); toast("Card removed")
+    }
+
     val searchSynonyms: StateFlow<Set<String>> =
         app.settings.searchSynonyms.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 

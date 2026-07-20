@@ -12,6 +12,7 @@ import com.neeraj.fin.data.db.GoalContribution
 import com.neeraj.fin.data.db.PendingSms
 import com.neeraj.fin.data.db.PendingStatus
 import com.neeraj.fin.data.db.RecurringRule
+import com.neeraj.fin.data.db.CreditCard
 import com.neeraj.fin.data.db.Pocket
 import com.neeraj.fin.data.db.Reminder
 import com.neeraj.fin.data.db.Txn
@@ -38,6 +39,7 @@ class FinRepository(private val db: AppDatabase) {
     val eventBudgets: Flow<List<EventBudget>> = db.eventBudgetDao().all()
     val reminders: Flow<List<Reminder>> = db.reminderDao().all()
     val pockets: Flow<List<Pocket>> = db.pocketDao().all()
+    val cards: Flow<List<CreditCard>> = db.cardDao().all()
     val recurringRules: Flow<List<RecurringRule>> = db.recurringRuleDao().all()
 
     suspend fun seedDefaultsIfEmpty() {
@@ -245,6 +247,12 @@ class FinRepository(private val db: AppDatabase) {
         return null
     }
 
+    // ----- Card vault -----
+
+    suspend fun saveCard(card: CreditCard) = db.cardDao().upsert(card)
+
+    suspend fun deleteCard(id: Long) = db.cardDao().delete(id)
+
     // ----- Reminders -----
 
     suspend fun saveReminder(reminder: Reminder) = db.reminderDao().upsert(reminder)
@@ -333,7 +341,8 @@ class FinRepository(private val db: AppDatabase) {
         val eventBudgets: List<EventBudget> = emptyList(),
         val recurringRules: List<RecurringRule> = emptyList(),
         val reminders: List<Reminder> = emptyList(),
-        val pockets: List<Pocket> = emptyList()
+        val pockets: List<Pocket> = emptyList(),
+        val cards: List<CreditCard> = emptyList()
     )
 
     suspend fun snapshot(): Snapshot = Snapshot(
@@ -347,7 +356,8 @@ class FinRepository(private val db: AppDatabase) {
         db.eventBudgetDao().allOnce(),
         db.recurringRuleDao().allOnce(),
         db.reminderDao().allOnce(),
-        db.pocketDao().allOnce()
+        db.pocketDao().allOnce(),
+        db.cardDao().allOnce()
     )
 
     suspend fun replaceAll(data: Snapshot) {
@@ -362,6 +372,7 @@ class FinRepository(private val db: AppDatabase) {
         db.recurringRuleDao().clear()
         db.reminderDao().clear()
         db.pocketDao().clear()
+        db.cardDao().clear()
         db.categoryDao().insertAll(data.categories)
         db.txnDao().insertAll(data.txns)
         db.budgetDao().insertAll(data.budgets)
@@ -370,6 +381,7 @@ class FinRepository(private val db: AppDatabase) {
         db.goalDao().insertAll(data.goals)
         db.reminderDao().insertAll(data.reminders)
         db.pocketDao().insertAll(data.pockets)
+        db.cardDao().insertAll(data.cards)
         db.goalDao().insertContributions(data.goalContributions)
         db.eventBudgetDao().insertAll(data.eventBudgets)
         db.recurringRuleDao().insertAll(data.recurringRules)
