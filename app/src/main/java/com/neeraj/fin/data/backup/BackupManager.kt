@@ -70,7 +70,8 @@ data class BackupReminder(
     val id: Long, val title: String, val amountMinor: Long, val recurrence: String,
     val dayOfMonth: Int, val monthOfYear: Int, val dueMillis: Long?, val merchant: String,
     val categoryId: Long?, val lastDoneKey: String?, val enabled: Boolean, val source: String,
-    val sourceBody: String = ""
+    val sourceBody: String = "",
+    val cardId: Long? = null
 )
 
 @Serializable
@@ -80,7 +81,7 @@ data class BackupPocket(val id: Long, val name: String, val emoji: String, val a
 data class BackupCard(
     val id: Long, val bankName: String, val holderName: String, val number: String,
     val cvv: String, val expiryMonth: Int, val expiryYear: Int, val network: String,
-    val colorIndex: Int, val createdAt: Long
+    val colorIndex: Int, val createdAt: Long, val cvvShifted: Boolean = false
 )
 
 @Serializable
@@ -152,7 +153,7 @@ class BackupManager(
             reminders = snap.reminders.map {
                 BackupReminder(it.id, it.title, it.amountMinor, it.recurrence, it.dayOfMonth,
                     it.monthOfYear, it.dueMillis, it.merchant, it.categoryId, it.lastDoneKey,
-                    it.enabled, it.source, it.sourceBody)
+                    it.enabled, it.source, it.sourceBody, it.cardId)
             },
             pockets = snap.pockets.map { BackupPocket(it.id, it.name, it.emoji, it.accountTails, it.createdAt) },
             cards = snap.cards.map {
@@ -160,7 +161,7 @@ class BackupManager(
                     it.id, it.bankName, it.holderName,
                     com.neeraj.fin.util.CardCrypto.decrypt(it.encNumber),
                     com.neeraj.fin.util.CardCrypto.decrypt(it.encCvv),
-                    it.expiryMonth, it.expiryYear, it.network, it.colorIndex, it.createdAt
+                    it.expiryMonth, it.expiryYear, it.network, it.colorIndex, it.createdAt, it.cvvShifted
                 )
             },
         )
@@ -250,7 +251,7 @@ class BackupManager(
                 reminders = data.reminders.map {
                     com.neeraj.fin.data.db.Reminder(it.id, it.title, it.amountMinor, it.recurrence,
                         it.dayOfMonth, it.monthOfYear, it.dueMillis, it.merchant, it.categoryId,
-                        it.lastDoneKey, it.enabled, it.source, it.sourceBody)
+                        it.lastDoneKey, it.enabled, it.source, it.sourceBody, it.cardId)
                 },
                 pockets = data.pockets.map {
                     com.neeraj.fin.data.db.Pocket(it.id, it.name, it.emoji, it.accountTails, it.createdAt)
@@ -263,7 +264,7 @@ class BackupManager(
                         encNumber = com.neeraj.fin.util.CardCrypto.encrypt(it.number),
                         encCvv = com.neeraj.fin.util.CardCrypto.encrypt(it.cvv),
                         expiryMonth = it.expiryMonth, expiryYear = it.expiryYear,
-                        colorIndex = it.colorIndex, createdAt = it.createdAt
+                        colorIndex = it.colorIndex, cvvShifted = it.cvvShifted, createdAt = it.createdAt
                     )
                 },
             )

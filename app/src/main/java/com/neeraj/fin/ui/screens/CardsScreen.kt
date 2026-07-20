@@ -74,11 +74,15 @@ private val cardColors = listOf(
 @Composable
 fun CardsScreen(vm: AppViewModel, nav: NavController) {
     val cards by vm.cards.collectAsState()
+    val reminders by vm.reminders.collectAsState()
+    val txns by vm.transactions.collectAsState()
     var selected by remember { mutableStateOf(0) }
     var editing by remember { mutableStateOf<CreditCard?>(null) }
     var creating by remember { mutableStateOf(false) }
     var revealedId by remember { mutableStateOf<Long?>(null) }
     var confirmDelete by remember { mutableStateOf<CreditCard?>(null) }
+    var decodeFor by remember { mutableStateOf<CreditCard?>(null) }
+    var trueCvv by remember { mutableStateOf<String?>(null) }
     val activity = LocalContext.current as? FragmentActivity
 
     fun requestReveal(card: CreditCard) {
@@ -154,10 +158,80 @@ fun CardsScreen(vm: AppViewModel, nav: NavController) {
                     } else {
                         Button(onClick = { requestReveal(sel) }, modifier = Modifier.weight(1f)) { Text("🔓 Reveal") }
                     }
+                    if (revealedId == sel.id && sel.cvvShifted) {
+                        OutlinedButton(onClick = { decodeFor = sel; trueCvv = null }, modifier = Modifier.weight(1f)) {
+                            Text("True CVV")
+                        }
+                    }
                     OutlinedButton(onClick = { editing = sel }, modifier = Modifier.weight(1f)) { Text("Edit") }
                     OutlinedButton(onClick = { confirmDelete = sel }, modifier = Modifier.weight(1f)) {
                         Text("Delete", color = MaterialTheme.colorScheme.error)
                     }
+                }
+
+                // Bill status from card-linked reminders (auto-created from
+                // bill-due SMS; auto-settled when the payment transfer lands).
+                val openBills = reminders.filter {
+                    it.cardId == sel.id && it.enabled && it.lastDoneKey == null
+                }.sortedBy { it.dueMillis ?: Long.MAX_VALUE }
+                openBills.firstOrNull()?.let { bill ->
+                    val dueDate = bill.dueMillis?.let { com.neeraj.fin.util.Format.toLocalDate(it) }
+                    val overdue = dueDate != null && dueDate.isBefore(java.time.LocalDate.now())
+                    androidx.compose.material3.Card(
+                        Modifier.fillMaxWidth().padding(top = 12.dp),
+                        colors = androidx.compose.material3.CardDefaults.cardColors(
+                            containerColor = if (overdue) MaterialTheme.colorScheme.errorContainer
+                            else MaterialTheme.colorScheme.secondaryContainer
+                        )
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    (if (bill.amountMinor > 0)
+                                        com.neeraj.fin.util.Format.money(bill.amountMinor, "INR") + " due"
+                                    else "Bill due") +
+                                        (dueDate?.let { " · $it" } ?: "") +
+                                        (if (overdue) " · OVERDUE" else ""),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    "Auto-clears when the payment is detected",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            TextButton(onClick = { vm.markReminderDone(bill) }) { Text("Paid ✓") }
+                        }
+                    }
+                }
+                // Cycle hint + this-month spend on this card (matched by tail)
+                val dueDays = reminders.filter { it.cardId == sel.id && it.dueMillis != null }
+                    .map { com.neeraj.fin.util.Format.toLocalDate(it.dueMillis!!).dayOfMonth }
+                val monthStart = java.time.LocalDate.now().withDayOfMonth(1)
+                    .atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+                val spend = txns.filter {
+                    it.accountTail == sel.last4 && it.timestamp >= monthStart &&
+                        it.type == com.neeraj.fin.data.db.TxnType.EXPENSE
+                }.sumOf { it.amountMinor }
+                val expiringSoon = sel.expiryMonth > 0 && java.time.LocalDate.of(
+                    sel.expiryYear, sel.expiryMonth.coerceIn(1, 12), 1
+                ).plusMonths(1).isBefore(java.time.LocalDate.now().plusMonths(3))
+                val hints = buildList {
+                    if (spend > 0) add("Spent ${com.neeraj.fin.util.Format.compact(spend, "INR")} this month on this card")
+                    if (dueDays.size >= 2) add("bill usually due around day ${dueDays.sorted()[dueDays.size / 2]}")
+                    if (expiringSoon) add("⚠️ card expires soon")
+                }
+                if (hints.isNotEmpty()) {
+                    Text(
+                        hints.joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
                 }
 
                 if (cards.size > 1) {
@@ -196,6 +270,51 @@ fun CardsScreen(vm: AppViewModel, nav: NavController) {
             onDismiss = { creating = false; editing = null }
         )
     }
+    decodeFor?.let { card ->
+        var offsetText by remember(card.id) { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { decodeFor = null; trueCvv = null },
+            title = { Text("Decode CVV") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "Enter your secret offset. The app never stores it and cannot " +
+                            "check it — a wrong offset simply shows a wrong CVV.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    OutlinedTextField(
+                        value = offsetText,
+                        onValueChange = { offsetText = it.filter { c -> c.isDigit() }.take(4) },
+                        label = { Text("Offset") },
+                        singleLine = true
+                    )
+                    trueCvv?.let {
+                        Text(
+                            "True CVV: $it",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val stored = CardCrypto.decrypt(card.encCvv)
+                        val len = stored.length.coerceAtLeast(3)
+                        val mod = Math.pow(10.0, len.toDouble()).toInt()
+                        val off = offsetText.toIntOrNull() ?: 0
+                        val real = ((stored.toIntOrNull() ?: 0) - off).mod(mod)
+                        trueCvv = real.toString().padStart(len, '0')
+                    },
+                    enabled = offsetText.isNotBlank()
+                ) { Text("Decode") }
+            },
+            dismissButton = { TextButton(onClick = { decodeFor = null; trueCvv = null }) { Text("Close") } }
+        )
+    }
+
     confirmDelete?.let { c ->
         ConfirmDialog(
             title = "Remove ${c.bankName} ·· ${c.last4}?",
@@ -243,7 +362,9 @@ private fun CardFace(card: CreditCard, revealed: Boolean, big: Boolean) {
                             color = Color.White.copy(alpha = 0.9f), style = MaterialTheme.typography.labelMedium)
                     }
                     Text(
-                        if (revealed) "CVV ${CardCrypto.decrypt(card.encCvv).ifBlank { "—" }}" else "CVV •••",
+                        if (revealed) "CVV ${CardCrypto.decrypt(card.encCvv).ifBlank { "—" }}" +
+                            (if (card.cvvShifted) " 🎭" else "")
+                        else "CVV •••",
                         color = Color.White, style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold
                     )
@@ -269,6 +390,8 @@ private fun CardDialog(
             ?.let { "%02d/%02d".format(it.expiryMonth, it.expiryYear % 100) } ?: "")
     }
     var colorIdx by remember { mutableStateOf(initial?.colorIndex ?: 0) }
+    var disguise by remember { mutableStateOf(initial?.cvvShifted ?: false) }
+    var offsetText by remember { mutableStateOf("") }
     var scanning by remember { mutableStateOf(false) }
 
     val digits = number.filter { it.isDigit() }
@@ -377,6 +500,26 @@ private fun CardDialog(
                         ) { if (colorIdx == i) Text("✓", color = Color.White, modifier = Modifier.align(Alignment.Center)) }
                     }
                 }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Disguise CVV", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Store CVV + a secret offset only you know. Even a reveal shows the disguised value.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    androidx.compose.material3.Switch(checked = disguise, onCheckedChange = { disguise = it })
+                }
+                if (disguise && initial?.cvvShifted != true) {
+                    OutlinedTextField(
+                        value = offsetText,
+                        onValueChange = { offsetText = it.filter { c -> c.isDigit() }.take(4) },
+                        label = { Text("Secret offset (memorize it!)") },
+                        supportingText = { Text("Stored CVV = CVV + offset. Kosh forgets the offset immediately.") },
+                        singleLine = true, modifier = Modifier.fillMaxWidth()
+                    )
+                }
                 Text(
                     "Stored encrypted on this device only (hardware keystore). Kosh cannot transmit it anywhere.",
                     style = MaterialTheme.typography.labelSmall,
@@ -397,7 +540,15 @@ private fun CardDialog(
                             last4 = digits.takeLast(4),
                             network = CardCrypto.network(digits),
                             encNumber = CardCrypto.encrypt(digits),
-                            encCvv = CardCrypto.encrypt(cvv),
+                            encCvv = CardCrypto.encrypt(
+                                if (disguise && initial?.cvvShifted != true && cvv.isNotBlank()) {
+                                    val len = cvv.length
+                                    val mod = Math.pow(10.0, len.toDouble()).toInt()
+                                    ((cvv.toIntOrNull() ?: 0) + (offsetText.toIntOrNull() ?: 0)).mod(mod)
+                                        .toString().padStart(len, '0')
+                                } else cvv
+                            ),
+                            cvvShifted = disguise,
                             expiryMonth = m,
                             expiryYear = if (y in 1..99) 2000 + y else y,
                             colorIndex = colorIdx

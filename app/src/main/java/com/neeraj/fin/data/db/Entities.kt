@@ -225,7 +225,9 @@ data class Reminder(
     val enabled: Boolean = true,
     val source: String = ReminderSource.MANUAL,
     // Full original message for SMS-suggested reminders, so the user can verify.
-    val sourceBody: String = ""
+    val sourceBody: String = "",
+    // Set when this is a card bill - links the reminder to a stored card.
+    val cardId: Long? = null
 )
 
 
@@ -264,5 +266,10 @@ data class CreditCard(
     val expiryMonth: Int = 0,        // 0 = not set
     val expiryYear: Int = 0,
     val colorIndex: Int = 0,         // palette index for the card face
+    // Decoy CVV: the stored CVV is the real one plus a user-memorized offset.
+    // The app never knows the offset, so even a full reveal shows a decoy;
+    // decoding happens on demand with the offset typed in (no validation
+    // possible by design - a wrong offset just yields a wrong CVV).
+    val cvvShifted: Boolean = false,
     val createdAt: Long = System.currentTimeMillis()
 )

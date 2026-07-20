@@ -187,6 +187,27 @@ class FinRepository(private val db: AppDatabase) {
     suspend fun lastCategoryForMerchant(merchant: String): Long? =
         db.txnDao().lastCategoryForMerchant(merchant)
 
+    /**
+     * A credit-card bill payment (transfer) settles any open card-bill
+     * reminder with a matching amount (within 2%) or matching card tail.
+     */
+    private suspend fun autoSettleCardBill(amountMinor: Long, body: String) {
+        val today = java.time.LocalDate.now()
+        val doneKey = "done"
+        db.reminderDao().allOnce().filter {
+            it.cardId != null && it.enabled && it.lastDoneKey == null &&
+                it.recurrence == com.neeraj.fin.data.db.ReminderRecurrence.ONCE
+        }.forEach { r ->
+            val card = db.cardDao().allOnce().firstOrNull { it.id == r.cardId }
+            val amountClose = r.amountMinor > 0 &&
+                kotlin.math.abs(r.amountMinor - amountMinor) * 50 <= r.amountMinor // within 2%
+            val tailMatch = card != null && card.last4.length == 4 && body.contains(card.last4)
+            if (amountClose || tailMatch) {
+                db.reminderDao().upsert(r.copy(lastDoneKey = doneKey))
+            }
+        }
+    }
+
     suspend fun approvePending(item: PendingSms, amountMinor: Long, type: String, categoryId: Long?, merchant: String, note: String) {
         db.txnDao().insert(
             Txn(
@@ -203,6 +224,7 @@ class FinRepository(private val db: AppDatabase) {
                 pocketId = item.pocketId
             )
         )
+        if (type == TxnType.TRANSFER) autoSettleCardBill(amountMinor, item.body)
         db.pendingSmsDao().delete(item.id)
     }
 
@@ -266,6 +288,10 @@ class FinRepository(private val db: AppDatabase) {
      * Rs 1,240 due on 25-07"). Deduped on title + due month.
      */
     suspend fun offerBillDueReminder(title: String, amountMinor: Long, dueMillis: Long, sourceBody: String = ""): Boolean {
+        // Link to a stored card when the message mentions its last-4.
+        val card = db.cardDao().allOnce().firstOrNull { c ->
+            c.last4.length == 4 && sourceBody.contains(c.last4)
+        }
         val dueKey = com.neeraj.fin.util.Format.toLocalDate(dueMillis).withDayOfMonth(1)
         val exists = db.reminderDao().allOnce().any { r ->
             r.title.equals(title, ignoreCase = true) && r.dueMillis != null &&
@@ -274,11 +300,13 @@ class FinRepository(private val db: AppDatabase) {
         if (exists) return false
         db.reminderDao().upsert(
             Reminder(
-                title = title, amountMinor = amountMinor,
+                title = card?.let { "${it.bankName} ·· ${it.last4} bill" } ?: title,
+                amountMinor = amountMinor,
                 recurrence = com.neeraj.fin.data.db.ReminderRecurrence.ONCE,
-                dueMillis = dueMillis, enabled = false,
+                dueMillis = dueMillis, enabled = card != null,
                 source = com.neeraj.fin.data.db.ReminderSource.SMS,
-                sourceBody = sourceBody
+                sourceBody = sourceBody,
+                cardId = card?.id
             )
         )
         return true

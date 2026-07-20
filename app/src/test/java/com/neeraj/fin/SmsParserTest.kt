@@ -117,6 +117,20 @@ class SmsParserTest {
     }
 
     @Test
+    fun `decoy cvv shift roundtrip`() {
+        // encode: real 018 + offset 18 -> stored 036; decode: 036 - 18 -> 018
+        val real = "018"; val offset = 18
+        val mod = 1000
+        val stored = ((real.toInt() + offset) % mod).toString().padStart(3, '0')
+        assertEquals("036", stored)
+        val decoded = (stored.toInt() - offset).mod(mod).toString().padStart(3, '0')
+        assertEquals(real, decoded)
+        // wrong offset yields a plausible decoy, not an error
+        val wrong = (stored.toInt() - 25).mod(mod).toString().padStart(3, '0')
+        assertEquals("011", wrong)
+    }
+
+    @Test
     fun `credit parses as income`() {
         val p = SmsParser.parse("VM-SBIINB", "Rs.25,000.00 credited to A/c XX9999 by NEFT from ACME CORP on 01-07-26.")
         assertNotNull(p)
