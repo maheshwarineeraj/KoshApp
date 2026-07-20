@@ -117,6 +117,18 @@ class SmsParserTest {
     }
 
     @Test
+    fun `hsbc bill due without currency marker parses total not minimum`() {
+        val body = "HSBC Credit Card ending 3971 : Total due: 3567.86, minimum due: 100; pay by 02-Aug-26. Payment modes- https://gs.im/HSBCIM/e/mi4MGsBaAd9. Ignore if paid."
+        val bill = com.neeraj.fin.data.sms.BillDueParser.parse("VM-HSBCIM-S", body)
+        assertNotNull(bill)
+        assertEquals(3567_86L, bill!!.amountMinor)
+        val due = com.neeraj.fin.util.BillDueExtractor.regexDate(body, java.time.LocalDate.of(2026, 7, 20))
+        assertNotNull(due)
+        assertEquals(java.time.LocalDate.of(2026, 8, 2),
+            java.time.Instant.ofEpochMilli(due!!).atZone(java.time.ZoneId.systemDefault()).toLocalDate())
+    }
+
+    @Test
     fun `decoy cvv shift roundtrip`() {
         // encode: real 018 + offset 18 -> stored 036; decode: 036 - 18 -> 018
         val real = "018"; val offset = 18

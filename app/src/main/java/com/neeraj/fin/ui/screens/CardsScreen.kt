@@ -153,19 +153,26 @@ fun CardsScreen(vm: AppViewModel, nav: NavController) {
                     Modifier.fillMaxWidth().padding(top = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    val pad = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 8.dp)
                     if (revealedId == sel.id) {
-                        OutlinedButton(onClick = { revealedId = null }, modifier = Modifier.weight(1f)) { Text("Hide") }
+                        OutlinedButton(onClick = { revealedId = null }, modifier = Modifier.weight(1f), contentPadding = pad) {
+                            Text("Hide", maxLines = 1, softWrap = false)
+                        }
                     } else {
-                        Button(onClick = { requestReveal(sel) }, modifier = Modifier.weight(1f)) { Text("🔓 Reveal") }
-                    }
-                    if (revealedId == sel.id && sel.cvvShifted) {
-                        OutlinedButton(onClick = { decodeFor = sel; trueCvv = null }, modifier = Modifier.weight(1f)) {
-                            Text("True CVV")
+                        Button(onClick = { requestReveal(sel) }, modifier = Modifier.weight(1f), contentPadding = pad) {
+                            Text("Reveal", maxLines = 1, softWrap = false)
                         }
                     }
-                    OutlinedButton(onClick = { editing = sel }, modifier = Modifier.weight(1f)) { Text("Edit") }
-                    OutlinedButton(onClick = { confirmDelete = sel }, modifier = Modifier.weight(1f)) {
-                        Text("Delete", color = MaterialTheme.colorScheme.error)
+                    if (revealedId == sel.id && sel.cvvShifted) {
+                        OutlinedButton(onClick = { decodeFor = sel; trueCvv = null }, modifier = Modifier.weight(1f), contentPadding = pad) {
+                            Text("Decode", maxLines = 1, softWrap = false)
+                        }
+                    }
+                    OutlinedButton(onClick = { editing = sel }, modifier = Modifier.weight(1f), contentPadding = pad) {
+                        Text("Edit", maxLines = 1, softWrap = false)
+                    }
+                    OutlinedButton(onClick = { confirmDelete = sel }, modifier = Modifier.weight(1f), contentPadding = pad) {
+                        Text("Delete", color = MaterialTheme.colorScheme.error, maxLines = 1, softWrap = false)
                     }
                 }
 
@@ -266,6 +273,7 @@ fun CardsScreen(vm: AppViewModel, nav: NavController) {
     if (creating || editing != null) {
         CardDialog(
             initial = editing,
+            defaultColor = cards.size % cardColors.size,
             onSave = { vm.saveCard(it); creating = false; editing = null },
             onDismiss = { creating = false; editing = null }
         )
@@ -377,6 +385,7 @@ private fun CardFace(card: CreditCard, revealed: Boolean, big: Boolean) {
 @Composable
 private fun CardDialog(
     initial: CreditCard?,
+    defaultColor: Int = 0,
     onSave: (CreditCard) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -389,7 +398,7 @@ private fun CardDialog(
         mutableStateOf(initial?.takeIf { it.expiryMonth > 0 }
             ?.let { "%02d/%02d".format(it.expiryMonth, it.expiryYear % 100) } ?: "")
     }
-    var colorIdx by remember { mutableStateOf(initial?.colorIndex ?: 0) }
+    var colorIdx by remember { mutableStateOf(initial?.colorIndex ?: defaultColor) }
     var disguise by remember { mutableStateOf(initial?.cvvShifted ?: false) }
     var offsetText by remember { mutableStateOf("") }
     var scanning by remember { mutableStateOf(false) }

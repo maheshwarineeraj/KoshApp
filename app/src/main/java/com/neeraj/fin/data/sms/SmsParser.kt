@@ -253,7 +253,12 @@ object BillDueParser {
         """(?:is due|due on|due by|due date|pay by|payable by|last date|will be debited|autopay|e-mandate|mandate|renew(?:al)? (?:by|on|due))""",
         RegexOption.IGNORE_CASE
     )
-    private val amount = Regex("""(?:rs\.?|inr|₹)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)""", RegexOption.IGNORE_CASE)
+    private val amountCur = Regex("""(?:rs\.?|inr|₹)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)""", RegexOption.IGNORE_CASE)
+    // "Total due: 3567.86" - banks often omit the currency marker in bill SMS.
+    private val amountDue = Regex(
+        """(?:total\s+due|amount\s+due|bill\s+amount|outstanding|due)\s*[:\-]?\s*(?:rs\.?|inr|₹)?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)""",
+        RegexOption.IGNORE_CASE
+    )
     private val biller = Regex(
         """(electricity|power|water|gas|broadband|internet|mobile|postpaid|prepaid|recharge|dth|credit card|card|insurance|premium|emi|loan|rent|maintenance|subscription|membership|fee|fastag|society|school|tax|bill)""",
         RegexOption.IGNORE_CASE
@@ -268,7 +273,12 @@ object BillDueParser {
     fun parse(sender: String, body: String): BillDue? {
         if (SmsParser.looksLikePersonalSender(sender)) return null
         if (!duePhrase.containsMatchIn(body)) return null
-        val amt = amount.find(body)?.groupValues?.get(1)?.replace(",", "")?.toDoubleOrNull() ?: return null
+        val lower = body.lowercase()
+        val dueAmt = amountDue.findAll(body).firstOrNull { m ->
+            !lower.substring((m.range.first - 10).coerceAtLeast(0), m.range.first).contains("min")
+        }?.groupValues?.get(1)
+        val amt = (dueAmt ?: amountCur.find(body)?.groupValues?.get(1))
+            ?.replace(",", "")?.toDoubleOrNull() ?: return null
         if (amt <= 0) return null
         // Any due-phrase + amount is a payment reminder even without a known
         // biller keyword; fall back to a generic title with the sender.
